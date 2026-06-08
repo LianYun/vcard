@@ -1,0 +1,37 @@
+# Vibe Word
+
+一个用 React + TypeScript 实现的轻量级背单词应用，采用 SuperMemo-2 间隔重复算法。所有数据保存在浏览器本地（localStorage），无需后端、无需登录。
+
+## 功能
+
+- **间隔重复复习**：基于 SuperMemo-2 算法，自动安排每张卡片的下次复习时间。
+- **自建卡片**：随时添加自己的单词卡（正面/背面/例句），可编辑、删除。
+- **每日新词预算**：在设置中控制每天自动引入多少张新卡。
+- **纯本地存储**：词库（内置 + 自建）与学习进度都存在浏览器中，刷新或关闭后仍在。
+
+## 技术栈
+
+- Vite + React 18 + TypeScript
+- Tailwind CSS
+- localStorage 持久化（无后端）
+- SuperMemo-2 调度算法
+
+## 开发
+
+```bash
+npm install      # 安装依赖
+npm run dev      # 启动开发服务器（默认 http://localhost:5173）
+npm run build    # 类型检查 + 生产构建
+npm run preview  # 预览生产构建
+npm run typecheck # 仅类型检查（不构建）
+```
+
+## 算法说明
+
+每张卡片维护三个参数：`ease`（难度系数，默认 2.5，下限 1.3）、`interval`（下次复习间隔，天）、`repetitions`（连续答对次数）。复习时根据回忆质量（Again=1 / Hard=3 / Good=4 / Easy=5）更新：
+
+- 质量 < 3（Again）：重置 repetitions，间隔回到 1 天。
+- 质量 ≥ 3：repetitions +1；第 1 次→1 天，第 2 次→6 天，之后 = round(上次间隔 × ease)。
+- ease 按公式 `EF' = EF + (0.1 - (5-q)(0.08 + (5-q)0.02))` 更新。
+
+实现见 `src/lib/sm2.ts`（纯函数）和 `src/lib/scheduler.ts`（今日队列）。
