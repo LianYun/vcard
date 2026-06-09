@@ -1,30 +1,21 @@
-import { WORD_BANK } from '../data/wordbank'
 import type { Card } from '../types'
 import {
-  hideBuiltinCard,
+  deleteOneCard,
   loadCustomCards,
-  loadHiddenBuiltins,
-  saveCustomCards,
+  saveOneCard,
+  updateOneCard,
 } from './storage'
 
-/** All visible cards: built-in (minus hidden) then custom. */
-export function allCards(): Card[] {
-  const hidden = loadHiddenBuiltins()
-  const builtins = WORD_BANK.filter((c) => !hidden.has(c.id))
-  return [...builtins, ...loadCustomCards()]
-}
-
-/** Only the user-created cards (editable/deletable). */
-export function customCards(): Card[] {
+export async function allCards(): Promise<Card[]> {
   return loadCustomCards()
 }
 
-/** Look up a single card by id across both sources. */
-export function findCard(id: string): Card | undefined {
-  return allCards().find((c) => c.id === id)
+export async function findCard(id: string): Promise<Card | undefined> {
+  const cards = await allCards()
+  return cards.find((c) => c.id === id)
 }
 
-export function addCard(front: string, back: string, example?: string): Card {
+export async function addCard(front: string, back: string, example?: string): Promise<Card> {
   const cleanedFront = front.trim()
   const cleanedBack = back.trim()
   if (!cleanedFront) {
@@ -35,39 +26,24 @@ export function addCard(front: string, back: string, example?: string): Card {
     front: cleanedFront,
     back: cleanedBack,
     example: example?.trim() || undefined,
-    custom: true,
   }
-  const cards = loadCustomCards()
-  saveCustomCards([...cards, card])
+  await saveOneCard(card)
   return card
 }
 
-export function updateCard(id: string, patch: Partial<Pick<Card, 'front' | 'back' | 'example'>>): boolean {
-  const cards = loadCustomCards()
-  let changed = false
-  const next = cards.map((c) => {
-    if (c.id !== id) return c
-    changed = true
-    return {
-      ...c,
-      front: patch.front?.trim() || c.front,
-      back: patch.back !== undefined ? patch.back.trim() : c.back,
-      example: patch.example !== undefined ? patch.example.trim() || undefined : c.example,
-    }
-  })
-  if (changed) saveCustomCards(next)
-  return changed
+export async function updateCard(
+  id: string,
+  patch: Partial<Pick<Card, 'front' | 'back' | 'example'>>,
+): Promise<boolean> {
+  const cards = await loadCustomCards()
+  const existing = cards.find((c) => c.id === id)
+  if (!existing) return false
+  const front = patch.front?.trim() || existing.front
+  const back = patch.back !== undefined ? patch.back.trim() : existing.back
+  const example = patch.example !== undefined ? patch.example.trim() || null : existing.example ?? null
+  return updateOneCard(id, front, back, example)
 }
 
-/** Delete a card. Custom cards are removed from storage; built-in cards are hidden. */
-export function deleteCard(id: string): boolean {
-  if (id.startsWith('builtin:')) {
-    hideBuiltinCard(id)
-    return true
-  }
-  const cards = loadCustomCards()
-  const next = cards.filter((c) => c.id !== id)
-  if (next.length === cards.length) return false
-  saveCustomCards(next)
-  return true
+export async function deleteCard(id: string): Promise<boolean> {
+  return deleteOneCard(id)
 }

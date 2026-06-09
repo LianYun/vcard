@@ -1,18 +1,13 @@
-// List + manage all cards. Custom cards can be edited inline or deleted;
-// built-in cards are shown read-only. Deleting also clears the card's progress
-// so its id never resurfaces in scheduling.
-
 import { useEffect, useState } from 'react'
-import { customCards, deleteCard, updateCard, allCards } from '../lib/cardStore'
+import { deleteCard, updateCard, allCards } from '../lib/cardStore'
 import { cardsToObsidianMd, downloadMarkdown } from '../lib/export'
-import { loadProgress, saveProgress } from '../lib/storage'
+import { deleteOneProgress } from '../lib/storage'
 import type { Card } from '../types'
 import { Markdown } from './Markdown'
 import { MarkdownEditor } from './MarkdownEditor'
 import { SpeakButton } from './SpeakButton'
 
 interface Props {
-  /** Bump this prop to force a refresh from elsewhere (e.g. after adding). */
   refreshKey: number
   onChanged?: () => void
 }
@@ -27,7 +22,7 @@ export function CardManager({ refreshKey, onChanged }: Props) {
   })
 
   useEffect(() => {
-    setCards(allCards())
+    allCards().then(setCards)
   }, [refreshKey])
 
   function startEdit(card: Card) {
@@ -35,32 +30,27 @@ export function CardManager({ refreshKey, onChanged }: Props) {
     setDraft({ front: card.front, back: card.back, example: card.example ?? '' })
   }
 
-  function commitEdit(card: Card) {
-    updateCard(card.id, draft)
+  async function commitEdit(card: Card) {
+    await updateCard(card.id, draft)
     setEditingId(null)
-    refresh()
+    await refresh()
     onChanged?.()
   }
 
-  function handleDelete(card: Card) {
+  async function handleDelete(card: Card) {
     if (!confirm(`确定删除「${card.front}」？相关学习进度也会被清除。`)) return
-    deleteCard(card.id)
-    // Clear its progress so it doesn't linger in scheduling state.
-    const progress = loadProgress()
-    if (progress[card.id]) {
-      delete progress[card.id]
-      saveProgress(progress)
-    }
-    refresh()
+    await deleteCard(card.id)
+    await deleteOneProgress(card.id)
+    await refresh()
     onChanged?.()
   }
 
-  function refresh() {
-    setCards(allCards())
+  async function refresh() {
+    setCards(await allCards())
   }
 
-  function handleExport() {
-    const all = allCards()
+  async function handleExport() {
+    const all = await allCards()
     if (all.length === 0) return
     const md = cardsToObsidianMd(all)
     const date = new Date().toISOString().slice(0, 10)
@@ -71,7 +61,7 @@ export function CardManager({ refreshKey, onChanged }: Props) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">
-          共 {cards.length} 张卡片（其中 {customCards().length} 张自建）
+          共 {cards.length} 张卡片
         </p>
         <button
           onClick={handleExport}
@@ -130,15 +120,6 @@ export function CardManager({ refreshKey, onChanged }: Props) {
                       {/^[a-zA-Z]/.test(card.front) && (
                         <SpeakButton text={card.front} lang="en" />
                       )}
-                      {card.custom ? (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
-                          自建
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-                          内置
-                        </span>
-                      )}
                     </div>
                     <Markdown content={card.back} className="mt-0.5 text-slate-600" />
                     {card.example && (
@@ -146,14 +127,12 @@ export function CardManager({ refreshKey, onChanged }: Props) {
                     )}
                   </div>
                   <div className="flex shrink-0 flex-col gap-1">
-                    {card.custom && (
-                      <button
-                        onClick={() => startEdit(card)}
-                        className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-                      >
-                        编辑
-                      </button>
-                    )}
+                    <button
+                      onClick={() => startEdit(card)}
+                      className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                    >
+                      编辑
+                    </button>
                     <button
                       onClick={() => handleDelete(card)}
                       className="rounded-lg bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-200"

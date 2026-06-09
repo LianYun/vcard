@@ -39,11 +39,6 @@ export function CardView({ card, onFlipChange }: Props) {
     >
       <div className="absolute top-4 left-5 text-xs font-medium uppercase tracking-wide text-slate-400">
         {flipped ? '释义' : '单词'}
-        {card.custom && (
-          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">
-            自建
-          </span>
-        )}
       </div>
 
       <div className="absolute top-3 right-4" data-no-flip>

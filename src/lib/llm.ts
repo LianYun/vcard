@@ -113,7 +113,6 @@ export async function generateCards(
     id: makeId(),
     front: parsed.word || word.trim(),
     back: buildEnToCnBack(parsed),
-    custom: true,
   }
 
   const cnToEn: Card = {
@@ -121,7 +120,6 @@ export async function generateCards(
     front: `${parsed.chineseHint}\n（提示：${parsed.roots}）`,
     back: parsed.word || word.trim(),
     example: parsed.example,
-    custom: true,
   }
 
   return { enToCn, cnToEn }

@@ -1,8 +1,8 @@
 // Domain types for the vibe-word app.
 
-/** A word card. Source is either the built-in wordbank or a user-created card. */
+/** A word card. */
 export interface Card {
-  /** Stable unique id; built-in cards use `builtin:<slug>`, custom use `custom:<timestamp>`. */
+  /** Stable unique id, e.g. `custom:<timestamp>-<random>`. */
   id: string
   /** Front of the card — typically the foreign word. */
   front: string
@@ -10,8 +10,6 @@ export interface Card {
   back: string
   /** Example sentence, optional. */
   example?: string
-  /** True for user-created cards (stored separately so they can be edited/deleted). */
-  custom?: boolean
 }
 
 /** Per-card scheduling state for the SuperMemo-2 algorithm. */
