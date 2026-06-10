@@ -1,14 +1,25 @@
 // Storage layer: Tauri → SQLite (~/.vword/vword.db), browser → localStorage fallback.
 
+import { invoke as tauriInvoke } from '@tauri-apps/api/core'
 import type { Card, LLMConfig, ProgressMap, SchedulingState, Settings } from '../types'
+import { createLogger } from './log'
 import { initialState } from './sm2'
 import { todayKey } from './date'
 
+const log = createLogger('storage')
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+log.info('initialized', { mode: IS_TAURI ? 'tauri' : 'browser-localStorage' })
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const { invoke: tauriInvoke } = await import('@tauri-apps/api/core')
-  return tauriInvoke<T>(cmd, args)
+  log.debug(`invoke → ${cmd}`, args)
+  try {
+    const result = await tauriInvoke<T>(cmd, args)
+    log.debug(`invoke ← ${cmd}`, result)
+    return result
+  } catch (err) {
+    log.error(`invoke ✗ ${cmd}`, err, { args })
+    throw err
+  }
 }
 
 // ── localStorage helpers (browser fallback) ─────────────────────────────
@@ -19,6 +30,7 @@ const LS_KEYS = {
   settings: 'vibe-word:settings:v1',
   meta: 'vibe-word:meta:v1',
   llmConfig: 'vibe-word:llm:v1',
+  dailyStats: 'vibe-word:daily-stats:v1',
 } as const
 
 function lsRead<T>(key: string, fallback: T): T {
@@ -39,16 +51,47 @@ function lsWrite(key: string, value: unknown): void {
 
 // ── Cards ───────────────────────────────────────────────────────────────
 
+interface CardRow {
+  id: string
+  front: string
+  back: string
+  example: string | null
+  created_at: number
+}
+
+function rowToCard(r: CardRow): Card {
+  return {
+    id: r.id,
+    front: r.front,
+    back: r.back,
+    example: r.example ?? undefined,
+    createdAt: r.created_at,
+  }
+}
+
 export async function loadCustomCards(): Promise<Card[]> {
-  if (IS_TAURI) return invoke<Card[]>('get_cards')
+  if (IS_TAURI) {
+    const rows = await invoke<CardRow[]>('get_cards')
+    return rows.map(rowToCard)
+  }
   const cards = lsRead<Card[]>(LS_KEYS.cards, [])
   return cards.filter((c) => c && typeof c.id === 'string')
+}
+
+function cardToRow(c: Card): CardRow {
+  return {
+    id: c.id,
+    front: c.front,
+    back: c.back,
+    example: c.example ?? null,
+    created_at: c.createdAt ?? Math.floor(Date.now() / 1000),
+  }
 }
 
 export async function saveCustomCards(cards: Card[]): Promise<void> {
   if (IS_TAURI) {
     for (const card of cards) {
-      await invoke('save_card', { card })
+      await invoke('save_card', { card: cardToRow(card) })
     }
     return
   }
@@ -57,7 +100,7 @@ export async function saveCustomCards(cards: Card[]): Promise<void> {
 
 export async function saveOneCard(card: Card): Promise<void> {
   if (IS_TAURI) {
-    await invoke('save_card', { card })
+    await invoke('save_card', { card: cardToRow(card) })
     return
   }
   const cards = lsRead<Card[]>(LS_KEYS.cards, [])
@@ -253,4 +296,36 @@ export async function saveLLMConfig(config: LLMConfig): Promise<void> {
     return
   }
   lsWrite(LS_KEYS.llmConfig, config)
+}
+
+// ── Daily Stats ─────────────────────────────────────────────────────────
+
+export type DailyStatField = 'reviewed' | 'added'
+
+export interface DailyStat {
+  date: string  // YYYY-MM-DD
+  reviewed: number
+  added: number
+}
+
+export async function incrementDailyStat(field: DailyStatField, date: string): Promise<void> {
+  if (IS_TAURI) {
+    await invoke('increment_daily_stat', { date, field })
+    return
+  }
+  const map = lsRead<Record<string, DailyStat>>(LS_KEYS.dailyStats, {})
+  const cur = map[date] ?? { date, reviewed: 0, added: 0 }
+  cur[field] += 1
+  map[date] = cur
+  lsWrite(LS_KEYS.dailyStats, map)
+}
+
+export async function getDailyStats(fromDate: string, toDate: string): Promise<DailyStat[]> {
+  if (IS_TAURI) {
+    return invoke<DailyStat[]>('get_daily_stats', { fromDate, toDate })
+  }
+  const map = lsRead<Record<string, DailyStat>>(LS_KEYS.dailyStats, {})
+  return Object.values(map)
+    .filter((s) => s.date >= fromDate && s.date <= toDate)
+    .sort((a, b) => a.date.localeCompare(b.date))
 }

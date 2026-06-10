@@ -5,10 +5,60 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vibe Word · 背单词</title>
-    <script type="module" crossorigin src="/assets/index-CmMQXDr7.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-fcEI3XrL.css">
+    <style>
+      #boot-error {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        padding: 24px;
+        background: #fff5f5;
+        color: #1f2937;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+        overflow: auto;
+      }
+      #boot-error h2 { color: #b91c1c; margin: 0 0 12px; font-size: 16px; }
+      #boot-error pre { background: #fef2f2; padding: 12px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
+    </style>
+    <script type="module" crossorigin src="/assets/index-lzXanjCC.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DA1VIEWR.css">
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot-error">
+      <h2>⚠️ 启动失败 (boot-error overlay)</h2>
+      <p>请把下方信息复制给开发者：</p>
+      <pre id="boot-error-text"></pre>
+    </div>
+    <script>
+      // Show this overlay if the bundle fails to even start (syntax error,
+      // 404, top-level throw, etc). React's ErrorBoundary can't help here.
+      function showBootError(msg) {
+        var el = document.getElementById('boot-error');
+        var text = document.getElementById('boot-error-text');
+        if (el && text) {
+          text.textContent = msg;
+          el.style.display = 'block';
+        }
+      }
+      window.addEventListener('error', function (e) {
+        var stack = e.error && e.error.stack ? '\n\n' + e.error.stack : '';
+        showBootError('[error] ' + (e.message || 'unknown') + stack +
+          '\nat ' + (e.filename || '?') + ':' + (e.lineno || '?') + ':' + (e.colno || '?'));
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        var r = e.reason;
+        var msg = r && r.message ? r.message : String(r);
+        var stack = r && r.stack ? '\n\n' + r.stack : '';
+        showBootError('[unhandledrejection] ' + msg + stack);
+      });
+      // Detect "bundle never executed" — if after 5s root is still empty, show overlay.
+      setTimeout(function () {
+        var root = document.getElementById('root');
+        if (root && root.childElementCount === 0) {
+          showBootError('App did not mount within 5s. The JS bundle may have failed silently. Check DevTools Network tab for failed requests.');
+        }
+      }, 5000);
+    </script>
   </body>
 </html>

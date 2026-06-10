@@ -1,27 +1,23 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { addCard } from '../lib/cardStore'
-import { generateCards } from '../lib/llm'
-import type { GeneratedCards } from '../lib/llm'
+import { generationQueue } from '../lib/generationQueue'
 import { ensureProgressSync, loadLLMConfig, loadProgress, saveOneProgress } from '../lib/storage'
 import type { Card, LLMConfig } from '../types'
-import { Markdown } from './Markdown'
+import { GenerationTaskList } from './GenerationTaskList'
 import { MarkdownEditor } from './MarkdownEditor'
 
 interface Props {
   onAdded?: (card: Card) => void
+  onJumpToCard?: (cardId: string) => void
 }
 
-export function AddCardForm({ onAdded }: Props) {
+export function AddCardForm({ onAdded, onJumpToCard }: Props) {
   const [front, setFront] = useState('')
   const [back, setBack] = useState('')
   const [example, setExample] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [lastAdded, setLastAdded] = useState<string | null>(null)
-
-  const [generating, setGenerating] = useState(false)
-  const [preview, setPreview] = useState<GeneratedCards | null>(null)
-  const [elapsed, setElapsed] = useState(0)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [enqueued, setEnqueued] = useState<string | null>(null)
 
   const [llmConfig, setLlmConfig] = useState<LLMConfig | null>(null)
 
@@ -29,16 +25,12 @@ export function AddCardForm({ onAdded }: Props) {
     loadLLMConfig().then(setLlmConfig)
   }, [])
 
+  // Refresh parent (StatsBar / CardManager) whenever a background task completes.
   useEffect(() => {
-    if (generating) {
-      setElapsed(0)
-      timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000)
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current)
-      timerRef.current = null
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [generating])
+    return generationQueue.onCompleted(() => {
+      onAdded?.({ id: '', front: '', back: '' })
+    })
+  }, [onAdded])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -51,15 +43,15 @@ export function AddCardForm({ onAdded }: Props) {
       setFront('')
       setBack('')
       setExample('')
-      setPreview(null)
       onAdded?.(card)
     } catch (err) {
       setError(err instanceof Error ? err.message : '添加失败')
     }
   }
 
-  async function handleGenerate() {
-    if (!front.trim()) {
+  function handleGenerate() {
+    const word = front.trim()
+    if (!word) {
       setError('请先输入一个英文单词')
       return
     }
@@ -68,39 +60,12 @@ export function AddCardForm({ onAdded }: Props) {
       return
     }
     setError(null)
-    setPreview(null)
-    setGenerating(true)
-    try {
-      const result = await generateCards(front.trim(), llmConfig)
-      setPreview(result)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'AI 生成失败')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  async function handleConfirmAI() {
-    if (!preview) return
-    setError(null)
-    try {
-      const card1 = await addCard(preview.enToCn.front, preview.enToCn.back, preview.enToCn.example)
-      const card2 = await addCard(preview.cnToEn.front, preview.cnToEn.back, preview.cnToEn.example)
-
-      let progress = await loadProgress()
-      progress = ensureProgressSync(progress, card1.id)
-      progress = ensureProgressSync(progress, card2.id)
-      await saveOneProgress(progress[card1.id])
-      await saveOneProgress(progress[card2.id])
-
-      setLastAdded(`${card1.front} (×2)`)
-      setFront('')
-      setPreview(null)
-      onAdded?.(card1)
-      onAdded?.(card2)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败')
-    }
+    generationQueue.enqueue(word, llmConfig)
+    setEnqueued(word)
+    setFront('')
+    setBack('')
+    setExample('')
+    setTimeout(() => setEnqueued((cur) => (cur === word ? null : cur)), 2500)
   }
 
   return (
@@ -114,7 +79,7 @@ export function AddCardForm({ onAdded }: Props) {
             <input
               type="text"
               value={front}
-              onChange={(e) => { setFront(e.target.value); setPreview(null) }}
+              onChange={(e) => setFront(e.target.value)}
               placeholder="例如：serendipity"
               className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2 text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
               autoFocus
@@ -122,11 +87,11 @@ export function AddCardForm({ onAdded }: Props) {
             {llmConfig && (
               <button
                 type="button"
-                disabled={generating || !front.trim()}
+                disabled={!front.trim()}
                 onClick={handleGenerate}
                 className="shrink-0 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-violet-700 active:scale-95 disabled:opacity-40"
               >
-                {generating ? `生成中… ${elapsed}s` : 'AI 生成'}
+                AI 生成（后台）
               </button>
             )}
           </div>
@@ -135,92 +100,47 @@ export function AddCardForm({ onAdded }: Props) {
               在设置页配置 AI 模型后，可一键生成释义、词源、例句等
             </p>
           )}
+          {enqueued && (
+            <p className="mt-2 text-xs text-emerald-600">
+              已加入后台队列：「{enqueued}」，可继续提交下一个
+            </p>
+          )}
         </div>
 
-        {preview && (
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold text-slate-700">AI 生成预览（共 2 张卡片）</h4>
-
-            <PreviewCard
-              label="卡片 1：英 → 中"
-              front={preview.enToCn.front}
-              back={preview.enToCn.back}
-            />
-            <PreviewCard
-              label="卡片 2：中 → 英"
-              front={preview.cnToEn.front}
-              back={preview.cnToEn.back}
-            />
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleConfirmAI}
-                className="rounded-xl bg-emerald-600 px-5 py-2.5 font-semibold text-white shadow-md transition hover:bg-emerald-700 active:scale-95"
-              >
-                确认添加
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreview(null)}
-                className="rounded-xl bg-slate-200 px-5 py-2.5 font-medium text-slate-700 transition hover:bg-slate-300 active:scale-95"
-              >
-                取消
-              </button>
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              释义 / 背面
+            </label>
+            <MarkdownEditor value={back} onChange={setBack} />
           </div>
-        )}
 
-        {!preview && (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                释义 / 背面
-              </label>
-              <MarkdownEditor value={back} onChange={setBack} />
-            </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">例句（可选）</label>
+            <input
+              type="text"
+              value={example}
+              onChange={(e) => setExample(e.target.value)}
+              placeholder="例如：Finding this café was pure serendipity."
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">例句（可选）</label>
-              <input
-                type="text"
-                value={example}
-                onChange={(e) => setExample(e.target.value)}
-                placeholder="例如：Finding this café was pure serendipity."
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="rounded-xl bg-brand-600 px-5 py-2.5 font-semibold text-white shadow-md transition hover:bg-brand-700 active:scale-95"
-            >
-              手动添加
-            </button>
-          </form>
-        )}
+          <button
+            type="submit"
+            className="rounded-xl bg-brand-600 px-5 py-2.5 font-semibold text-white shadow-md transition hover:bg-brand-700 active:scale-95"
+          >
+            手动添加
+          </button>
+        </form>
 
         {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
         {lastAdded && !error && (
           <p className="mt-3 text-sm text-emerald-600">已添加：「{lastAdded}」</p>
         )}
       </div>
-    </div>
-  )
-}
 
-function PreviewCard({ label, front, back }: { label: string; front: string; back: string }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      <div className="mb-2">
-        <span className="text-xs text-slate-400">正面：</span>
-        <Markdown content={front} className="inline font-medium text-slate-800" />
-      </div>
-      <div>
-        <span className="text-xs text-slate-400">背面：</span>
-        <Markdown content={back} className="text-slate-700" />
-      </div>
+      <GenerationTaskList onJumpToCard={onJumpToCard} />
     </div>
   )
 }

@@ -24,7 +24,25 @@ npm run dev      # 启动开发服务器（默认 http://localhost:5173）
 npm run build    # 类型检查 + 生产构建
 npm run preview  # 预览生产构建
 npm run typecheck # 仅类型检查（不构建）
+npm run tauri:dev   # 桌面应用开发模式
+npm run tauri:build # 本地打包（生成 .dmg / .msi）
 ```
+
+## 发布版本
+
+发布通过 GitHub Actions 自动完成：
+
+1. 在 `package.json` 和 `src-tauri/tauri.conf.json` 中更新版本号
+2. 提交并推送
+3. 打 tag 并推送：
+   ```bash
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+4. GitHub Actions 会在 macOS (Apple Silicon) 和 Windows 上构建，并将产物作为草稿发布到 [Releases](../../releases)
+5. 进入 Releases 页面，编辑并发布草稿即可
+
+CI 工作流：每次 PR / push main 自动跑前端 typecheck + build 与 Rust `cargo check`。
 
 ## 算法说明
 

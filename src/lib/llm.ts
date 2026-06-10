@@ -72,6 +72,7 @@ function extractJSON(text: string): string {
 export async function generateCards(
   word: string,
   config: LLMConfig,
+  signal?: AbortSignal,
 ): Promise<GeneratedCards> {
   const url = `${config.baseURL.replace(/\/+$/, '')}/chat/completions`
 
@@ -89,6 +90,7 @@ export async function generateCards(
       ],
       temperature: 0.3,
     }),
+    signal,
   })
 
   if (!res.ok) {

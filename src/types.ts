@@ -10,6 +10,8 @@ export interface Card {
   back: string
   /** Example sentence, optional. */
   example?: string
+  /** Unix timestamp (seconds) when the card was created. */
+  createdAt?: number
 }
 
 /** Per-card scheduling state for the SuperMemo-2 algorithm. */

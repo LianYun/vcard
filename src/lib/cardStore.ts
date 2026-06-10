@@ -1,10 +1,12 @@
 import type { Card } from '../types'
 import {
   deleteOneCard,
+  incrementDailyStat,
   loadCustomCards,
   saveOneCard,
   updateOneCard,
 } from './storage'
+import { todayKey } from './date'
 
 export async function allCards(): Promise<Card[]> {
   return loadCustomCards()
@@ -26,8 +28,10 @@ export async function addCard(front: string, back: string, example?: string): Pr
     front: cleanedFront,
     back: cleanedBack,
     example: example?.trim() || undefined,
+    createdAt: Math.floor(Date.now() / 1000),
   }
   await saveOneCard(card)
+  await incrementDailyStat('added', todayKey())
   return card
 }
 

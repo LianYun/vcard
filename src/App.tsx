@@ -18,9 +18,15 @@ const TABS: { key: Tab; label: string }[] = [
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('study')
-  // refreshKey bumps StatsBar/CardManager after mutations.
   const [refreshKey, setRefreshKey] = useState(0)
+  const [highlightCardId, setHighlightCardId] = useState<string | null>(null)
   const bump = () => setRefreshKey((k) => k + 1)
+
+  function jumpToCard(cardId: string) {
+    setHighlightCardId(cardId)
+    setTab('cards')
+    bump()
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -51,13 +57,19 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-6">
-        <div className="mb-6">
-          <StatsBar refreshKey={refreshKey} />
-        </div>
-
         {tab === 'study' && <StudyPage />}
-        {tab === 'add' && <AddCardForm onAdded={bump} />}
-        {tab === 'cards' && <CardManager refreshKey={refreshKey} onChanged={bump} />}
+        {tab === 'add' && <AddCardForm onAdded={bump} onJumpToCard={jumpToCard} />}
+        {tab === 'cards' && (
+          <div className="space-y-6">
+            <StatsBar refreshKey={refreshKey} />
+            <CardManager
+              refreshKey={refreshKey}
+              onChanged={bump}
+              highlightCardId={highlightCardId}
+              onHighlightConsumed={() => setHighlightCardId(null)}
+            />
+          </div>
+        )}
         {tab === 'settings' && <SettingsPanel onChanged={bump} />}
       </main>
     </div>

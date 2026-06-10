@@ -16,9 +16,9 @@ import { todayKey } from './date'
 import { initialState } from './sm2'
 
 export interface ScheduleResult {
-  /** Due review cards, ordered by most-overdue first. */
+  /** Due review cards, in randomized order. */
   dueReviews: Card[]
-  /** New cards to introduce, capped by the daily budget. */
+  /** New cards to introduce, randomly sampled from the fresh pool. */
   newCards: Card[]
   /** Updated meta reflecting new-cards-issued counter after this scheduling. */
   meta: Meta
@@ -29,13 +29,13 @@ function isFresh(state: SchedulingState | undefined): boolean {
   return !state
 }
 
-/** Days overdue (negative = future). 0 means due today. */
-function daysOverdue(state: SchedulingState, refKey: string): number {
-  const [ry, rm, rd] = refKey.split('-').map(Number)
-  const [dy, dm, dd] = state.due.split('-').map(Number)
-  const a = Date.UTC(ry, rm - 1, rd)
-  const b = Date.UTC(dy, dm - 1, dd)
-  return Math.round((a - b) / 86_400_000)
+/** In-place Fisher-Yates shuffle. Returns the same array for chaining. */
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
 }
 
 /**
@@ -75,15 +75,13 @@ export function schedule(
     }
   }
 
-  // Most overdue first.
-  dueReviews.sort((a, b) => {
-    const da = daysOverdue(progress[a.id]!, today)
-    const db = daysOverdue(progress[b.id]!, today)
-    return db - da
-  })
+  // Shuffle due reviews so the order isn't tied to insertion order or
+  // most-overdue-first. Within today's due set, all cards are equally important.
+  shuffle(dueReviews)
 
-  // New cards: respect remaining daily budget.
+  // New cards: shuffle the fresh pool, then take up to the remaining daily budget.
   const remainingBudget = Math.max(0, settings.newCardsPerDay - effectiveMeta.newCardsIssued)
+  shuffle(fresh)
   const newCards = fresh.slice(0, remainingBudget)
   const newlyIssued = newCards.length
 

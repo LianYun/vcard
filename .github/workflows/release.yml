@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  # Allow manual runs from the Actions UI (won't auto-create release unless tag matches).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-tauri:
+    name: Build (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # GitHub-hosted macos-latest is Apple Silicon (arm64).
+          - platform: macos-latest
+            label: macOS (Apple Silicon)
+            target: aarch64-apple-darwin
+          - platform: windows-latest
+            label: Windows
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build & publish via tauri-action
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: 'Vibe Word ${{ github.event.inputs.tag || github.ref_name }}'
+          releaseBody: |
+            See the assets below to download and install this release.
+
+            **macOS**: download the `.dmg` (Apple Silicon).
+            **Windows**: download the `.msi` installer.
+
+            > Builds are unsigned. macOS users may need to right-click → Open the first time.
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}

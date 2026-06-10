@@ -20,6 +20,8 @@ pub fn run() {
             db::get_setting,
             db::set_setting,
             db::get_all_settings,
+            db::increment_daily_stat,
+            db::get_daily_stats,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

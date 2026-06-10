@@ -3,6 +3,7 @@ import type { Card, ProgressMap, ReviewButton, SchedulingState } from '../types'
 import { GRADE_BY_BUTTON, grade as sm2Grade, initialState } from '../lib/sm2'
 import { schedule } from '../lib/scheduler'
 import {
+  incrementDailyStat,
   loadMeta,
   loadProgress,
   loadSettings,
@@ -11,6 +12,9 @@ import {
 } from '../lib/storage'
 import { allCards } from '../lib/cardStore'
 import { todayKey } from '../lib/date'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('review-queue')
 
 export interface ReviewQueueState {
   current: Card | null
@@ -36,35 +40,58 @@ export function useReviewQueue(): ReviewQueue {
   const [relearned, setRelearned] = useState(0)
 
   const buildQueue = useCallback(async () => {
-    const [cards, prog, settings, meta] = await Promise.all([
-      allCards(),
-      loadProgress(),
-      loadSettings(),
-      loadMeta(),
-    ])
+    log.info('building queue')
+    try {
+      const [cards, prog, settings, meta] = await Promise.all([
+        allCards(),
+        loadProgress(),
+        loadSettings(),
+        loadMeta(),
+      ])
+      log.debug('loaded inputs', {
+        cards: cards.length,
+        progressEntries: Object.keys(prog).length,
+        settings,
+        meta,
+      })
 
-    const result = schedule(cards, prog, settings, meta)
+      const result = schedule(cards, prog, settings, meta)
+      log.debug('scheduled', {
+        dueReviews: result.dueReviews.length,
+        newCards: result.newCards.length,
+      })
 
-    let nextProgress = { ...prog }
-    for (const card of result.newCards) {
-      if (!nextProgress[card.id]) {
-        const fresh = initialState(card.id, todayKey())
-        nextProgress[card.id] = fresh
-        await saveOneProgress(fresh)
+      let nextProgress = { ...prog }
+      for (const card of result.newCards) {
+        if (!nextProgress[card.id]) {
+          const fresh = initialState(card.id, todayKey())
+          nextProgress[card.id] = fresh
+          await saveOneProgress(fresh)
+        }
       }
-    }
 
-    if (result.meta.newCardsDate !== meta.newCardsDate || result.meta.newCardsIssued !== meta.newCardsIssued) {
-      await saveMeta(result.meta)
-    }
+      if (result.meta.newCardsDate !== meta.newCardsDate || result.meta.newCardsIssued !== meta.newCardsIssued) {
+        await saveMeta(result.meta)
+      }
 
-    setProgress(nextProgress)
-    const fullQueue = [...result.dueReviews, ...result.newCards]
-    setQueue(fullQueue)
-    setTotal(fullQueue.length)
-    setDone(0)
-    setRelearned(0)
-    setReady(true)
+      setProgress(nextProgress)
+      const fullQueue = [...result.dueReviews, ...result.newCards]
+      for (let i = fullQueue.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[fullQueue[i], fullQueue[j]] = [fullQueue[j], fullQueue[i]]
+      }
+      setQueue(fullQueue)
+      setTotal(fullQueue.length)
+      setDone(0)
+      setRelearned(0)
+      setReady(true)
+      log.info('queue ready', { total: fullQueue.length })
+    } catch (err) {
+      log.error('buildQueue failed', err)
+      // Mark ready so the UI doesn't hang on the loading state forever; the
+      // user sees an empty queue (finished) and can re-enter the tab to retry.
+      setReady(true)
+    }
   }, [])
 
   useEffect(() => {
@@ -86,6 +113,7 @@ export function useReviewQueue(): ReviewQueue {
         })
 
         saveOneProgress(updated)
+        incrementDailyStat('reviewed', todayKey())
 
         if (button === 'again') {
           setRelearned((n) => n + 1)
