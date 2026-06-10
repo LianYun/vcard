@@ -11,7 +11,12 @@ npm run build      # tsc -b (typecheck) then vite build
 npm run typecheck  # tsc -b --noEmit (typecheck only, fast)
 npm run preview    # preview the production build
 npm run lint       # eslint (no config yet; script exists for later)
+npm run tauri:dev  # launch as desktop app (dev mode, hot reload)
+npm run tauri:build # build .dmg/.app installer (production)
 ```
+
+Tauri requires Rust (`rustup`). The Rust project lives in `src-tauri/`;
+`src-tauri/target/` is gitignored (large compilation output).
 
 There is no test runner configured yet. `src/lib/sm2.ts` and `src/lib/scheduler.ts`
 are written as pure functions specifically so tests can be added later (vitest fits).
@@ -103,6 +108,5 @@ Styling is Tailwind; brand color tokens are defined in `tailwind.config.js`.
 
 - TypeScript is strict with `noUnusedLocals`/`noUnusedParameters` — remove unused imports
   and disabled eslint lines when refactoring, or `npm run build` fails.
-- `tsconfig.app.json` defines a `@/*` path alias to `src/*`.
 - Adding words: either extend `WORD_BANK` in code, or build UI that calls
   `cardStore.addCard()` (which persists to localStorage).

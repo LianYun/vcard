@@ -1,10 +1,6 @@
-// Today's at-a-glance counts: due reviews and new cards scheduled for today,
-// plus total cards in the system.
-
-import { useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { allCards } from '../lib/cardStore'
 import { loadMeta, loadProgress, loadSettings } from '../lib/storage'
-import type { Meta } from '../lib/storage'
 import { schedule } from '../lib/scheduler'
 import { todayKey } from '../lib/date'
 
@@ -12,24 +8,29 @@ interface Props {
   refreshKey: number
 }
 
-function effectiveMeta(): Meta {
-  const m = loadMeta()
-  const today = todayKey()
-  return m.newCardsDate === today
-    ? m
-    : { newCardsDate: today, newCardsIssued: 0 }
-}
-
 export function StatsBar({ refreshKey }: Props) {
-  const stats = useMemo(() => {
-    const today = schedule(allCards(), loadProgress(), loadSettings(), effectiveMeta())
-    return {
-      due: today.dueReviews.length,
-      newCards: today.newCards.length,
-      total: allCards().length,
+  const [stats, setStats] = useState({ due: 0, newCards: 0, total: 0 })
+
+  useEffect(() => {
+    async function load() {
+      const [cards, progress, settings, meta] = await Promise.all([
+        allCards(),
+        loadProgress(),
+        loadSettings(),
+        loadMeta(),
+      ])
+      const today = todayKey()
+      const effectiveMeta = meta.newCardsDate === today
+        ? meta
+        : { newCardsDate: today, newCardsIssued: 0 }
+      const result = schedule(cards, progress, settings, effectiveMeta)
+      setStats({
+        due: result.dueReviews.length,
+        newCards: result.newCards.length,
+        total: cards.length,
+      })
     }
-    // refreshKey bumps recompute after add/edit/delete.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    load()
   }, [refreshKey])
 
   return (

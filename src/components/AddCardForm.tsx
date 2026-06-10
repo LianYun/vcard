@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { addCard } from '../lib/cardStore'
 import { generateCards } from '../lib/llm'
 import type { GeneratedCards } from '../lib/llm'
-import { ensureProgress, loadLLMConfig, loadProgress, saveProgress } from '../lib/storage'
-import type { Card } from '../types'
+import { ensureProgressSync, loadLLMConfig, loadProgress, saveOneProgress } from '../lib/storage'
+import type { Card, LLMConfig } from '../types'
 import { Markdown } from './Markdown'
 import { MarkdownEditor } from './MarkdownEditor'
 
@@ -18,11 +18,16 @@ export function AddCardForm({ onAdded }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [lastAdded, setLastAdded] = useState<string | null>(null)
 
-  // AI generation state
   const [generating, setGenerating] = useState(false)
   const [preview, setPreview] = useState<GeneratedCards | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const [llmConfig, setLlmConfig] = useState<LLMConfig | null>(null)
+
+  useEffect(() => {
+    loadLLMConfig().then(setLlmConfig)
+  }, [])
 
   useEffect(() => {
     if (generating) {
@@ -35,15 +40,13 @@ export function AddCardForm({ onAdded }: Props) {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [generating])
 
-  const llmConfig = loadLLMConfig()
-
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     try {
-      const card = addCard(front, back, example)
-      const progress = ensureProgress(loadProgress(), card.id)
-      saveProgress(progress)
+      const card = await addCard(front, back, example)
+      const progress = ensureProgressSync(await loadProgress(), card.id)
+      await saveOneProgress(progress[card.id])
       setLastAdded(card.front)
       setFront('')
       setBack('')
@@ -77,17 +80,18 @@ export function AddCardForm({ onAdded }: Props) {
     }
   }
 
-  function handleConfirmAI() {
+  async function handleConfirmAI() {
     if (!preview) return
     setError(null)
     try {
-      const card1 = addCard(preview.enToCn.front, preview.enToCn.back, preview.enToCn.example)
-      const card2 = addCard(preview.cnToEn.front, preview.cnToEn.back, preview.cnToEn.example)
+      const card1 = await addCard(preview.enToCn.front, preview.enToCn.back, preview.enToCn.example)
+      const card2 = await addCard(preview.cnToEn.front, preview.cnToEn.back, preview.cnToEn.example)
 
-      let progress = loadProgress()
-      progress = ensureProgress(progress, card1.id)
-      progress = ensureProgress(progress, card2.id)
-      saveProgress(progress)
+      let progress = await loadProgress()
+      progress = ensureProgressSync(progress, card1.id)
+      progress = ensureProgressSync(progress, card2.id)
+      await saveOneProgress(progress[card1.id])
+      await saveOneProgress(progress[card2.id])
 
       setLastAdded(`${card1.front} (×2)`)
       setFront('')
@@ -102,7 +106,6 @@ export function AddCardForm({ onAdded }: Props) {
   return (
     <div className="space-y-4">
       <div className="rounded-3xl bg-white p-6 shadow-md ring-1 ring-slate-200">
-        {/* Word input + AI generate button */}
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-slate-700">
             单词 / 正面 <span className="text-rose-500">*</span>
@@ -134,7 +137,6 @@ export function AddCardForm({ onAdded }: Props) {
           )}
         </div>
 
-        {/* AI preview */}
         {preview && (
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-slate-700">AI 生成预览（共 2 张卡片）</h4>
@@ -169,7 +171,6 @@ export function AddCardForm({ onAdded }: Props) {
           </div>
         )}
 
-        {/* Manual entry (shown when no preview) */}
         {!preview && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

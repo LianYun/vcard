@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { loadLLMConfig, loadSettings, saveLLMConfig, saveSettings } from '../lib/storage'
 import type { LLMConfig } from '../types'
 
@@ -7,24 +7,30 @@ interface Props {
 }
 
 export function SettingsPanel({ onChanged }: Props) {
-  const [newCardsPerDay, setNewCardsPerDay] = useState<number>(
-    () => loadSettings().newCardsPerDay,
-  )
-
-  const [llm, setLlm] = useState<LLMConfig>(() => {
-    return loadLLMConfig() ?? { baseURL: '', apiKey: '', model: '' }
-  })
+  const [newCardsPerDay, setNewCardsPerDay] = useState(10)
+  const [llm, setLlm] = useState<LLMConfig>({ baseURL: '', apiKey: '', model: '' })
   const [llmSaved, setLlmSaved] = useState(false)
+  const [loaded, setLoaded] = useState(false)
 
-  function handleSaveStudy(e: React.FormEvent) {
+  useEffect(() => {
+    async function load() {
+      const [settings, llmCfg] = await Promise.all([loadSettings(), loadLLMConfig()])
+      setNewCardsPerDay(settings.newCardsPerDay)
+      if (llmCfg) setLlm(llmCfg)
+      setLoaded(true)
+    }
+    load()
+  }, [])
+
+  async function handleSaveStudy(e: React.FormEvent) {
     e.preventDefault()
-    saveSettings({ newCardsPerDay: Math.max(0, Math.floor(newCardsPerDay)) })
+    await saveSettings({ newCardsPerDay: Math.max(0, Math.floor(newCardsPerDay)) })
     onChanged?.()
   }
 
-  function handleSaveLLM(e: React.FormEvent) {
+  async function handleSaveLLM(e: React.FormEvent) {
     e.preventDefault()
-    saveLLMConfig({
+    await saveLLMConfig({
       baseURL: llm.baseURL.trim(),
       apiKey: llm.apiKey.trim(),
       model: llm.model.trim(),
@@ -34,9 +40,10 @@ export function SettingsPanel({ onChanged }: Props) {
     onChanged?.()
   }
 
+  if (!loaded) return null
+
   return (
     <div className="space-y-6">
-      {/* Study settings */}
       <form onSubmit={handleSaveStudy} className="space-y-4 rounded-3xl bg-white p-6 shadow-md ring-1 ring-slate-200">
         <h3 className="text-base font-semibold text-slate-800">学习设置</h3>
         <label className="block text-sm font-medium text-slate-700">
@@ -61,7 +68,6 @@ export function SettingsPanel({ onChanged }: Props) {
         </button>
       </form>
 
-      {/* LLM API config */}
       <form onSubmit={handleSaveLLM} className="space-y-4 rounded-3xl bg-white p-6 shadow-md ring-1 ring-slate-200">
         <h3 className="text-base font-semibold text-slate-800">AI 模型配置</h3>
         <p className="text-xs text-slate-500">
@@ -70,9 +76,7 @@ export function SettingsPanel({ onChanged }: Props) {
         </p>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            API 地址
-          </label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">API 地址</label>
           <input
             type="text"
             value={llm.baseURL}
@@ -83,9 +87,7 @@ export function SettingsPanel({ onChanged }: Props) {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            API Key
-          </label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">API Key</label>
           <input
             type="password"
             value={llm.apiKey}
@@ -96,9 +98,7 @@ export function SettingsPanel({ onChanged }: Props) {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            模型名称
-          </label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">模型名称</label>
           <input
             type="text"
             value={llm.model}
@@ -115,9 +115,7 @@ export function SettingsPanel({ onChanged }: Props) {
           >
             保存配置
           </button>
-          {llmSaved && (
-            <span className="text-sm text-emerald-600">已保存</span>
-          )}
+          {llmSaved && <span className="text-sm text-emerald-600">已保存</span>}
         </div>
       </form>
     </div>

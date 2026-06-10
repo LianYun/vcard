@@ -1,144 +1,256 @@
-// localStorage persistence layer with versioned, validated keys.
-//
-// Responsibilities:
-//  - Serialize/deserialize typed JSON under namespaced keys.
-//  - Survive corrupt/missing data gracefully (reset to defaults rather than crash).
-//  - All app code reads/writes through these functions; nothing else touches
-//    localStorage directly.
+// Storage layer: Tauri → SQLite (~/.vword/vword.db), browser → localStorage fallback.
 
-import type { Card, LLMConfig, ProgressMap, Settings } from '../types'
+import type { Card, LLMConfig, ProgressMap, SchedulingState, Settings } from '../types'
 import { initialState } from './sm2'
 import { todayKey } from './date'
 
-export const STORAGE_KEYS = {
-  customCards: 'vibe-word:cards:v1',
+const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+
+async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  const { invoke: tauriInvoke } = await import('@tauri-apps/api/core')
+  return tauriInvoke<T>(cmd, args)
+}
+
+// ── localStorage helpers (browser fallback) ─────────────────────────────
+
+const LS_KEYS = {
+  cards: 'vibe-word:cards:v1',
   progress: 'vibe-word:progress:v1',
   settings: 'vibe-word:settings:v1',
   meta: 'vibe-word:meta:v1',
   llmConfig: 'vibe-word:llm:v1',
-  hiddenBuiltins: 'vibe-word:hidden-builtins:v1',
 } as const
 
-export const DEFAULT_SETTINGS: Settings = {
-  newCardsPerDay: 10,
-}
-
-/** Today's date key captured at load; overridable in tests. */
-function nowKey(): string {
-  return todayKey()
-}
-
-// --- generic read/write ----------------------------------------------------
-
-function readJSON<T>(key: string, fallback: T): T {
+function lsRead<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key)
     if (!raw) return fallback
     return JSON.parse(raw) as T
   } catch {
-    // Corrupt JSON — reset rather than propagate.
     return fallback
   }
 }
 
-function writeJSON(key: string, value: unknown): void {
+function lsWrite(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // Quota exceeded or storage disabled — ignore for now.
-  }
+  } catch { /* ignore */ }
 }
 
-// --- custom cards ----------------------------------------------------------
+// ── Cards ───────────────────────────────────────────────────────────────
 
-export function loadCustomCards(): Card[] {
-  const cards = readJSON<Card[]>(STORAGE_KEYS.customCards, [])
+export async function loadCustomCards(): Promise<Card[]> {
+  if (IS_TAURI) return invoke<Card[]>('get_cards')
+  const cards = lsRead<Card[]>(LS_KEYS.cards, [])
   return cards.filter((c) => c && typeof c.id === 'string')
 }
 
-export function saveCustomCards(cards: Card[]): void {
-  writeJSON(STORAGE_KEYS.customCards, cards)
+export async function saveCustomCards(cards: Card[]): Promise<void> {
+  if (IS_TAURI) {
+    for (const card of cards) {
+      await invoke('save_card', { card })
+    }
+    return
+  }
+  lsWrite(LS_KEYS.cards, cards)
 }
 
-// --- progress (per-card scheduling state) ----------------------------------
+export async function saveOneCard(card: Card): Promise<void> {
+  if (IS_TAURI) {
+    await invoke('save_card', { card })
+    return
+  }
+  const cards = lsRead<Card[]>(LS_KEYS.cards, [])
+  const idx = cards.findIndex((c) => c.id === card.id)
+  if (idx >= 0) cards[idx] = card
+  else cards.push(card)
+  lsWrite(LS_KEYS.cards, cards)
+}
 
-export function loadProgress(): ProgressMap {
-  const map = readJSON<ProgressMap>(STORAGE_KEYS.progress, {})
-  // Light validation: drop entries missing cardId.
+export async function updateOneCard(
+  id: string,
+  front: string,
+  back: string,
+  example: string | null,
+): Promise<boolean> {
+  if (IS_TAURI) return invoke<boolean>('update_card', { id, front, back, example })
+  const cards = lsRead<Card[]>(LS_KEYS.cards, [])
+  let changed = false
+  const next = cards.map((c) => {
+    if (c.id !== id) return c
+    changed = true
+    return { ...c, front, back, example: example || undefined }
+  })
+  if (changed) lsWrite(LS_KEYS.cards, next)
+  return changed
+}
+
+export async function deleteOneCard(id: string): Promise<boolean> {
+  if (IS_TAURI) return invoke<boolean>('delete_card', { id })
+  const cards = lsRead<Card[]>(LS_KEYS.cards, [])
+  const next = cards.filter((c) => c.id !== id)
+  if (next.length === cards.length) return false
+  lsWrite(LS_KEYS.cards, next)
+  return true
+}
+
+// ── Progress ────────────────────────────────────────────────────────────
+
+interface ProgressRow {
+  card_id: string
+  ease: number
+  interval: number
+  repetitions: number
+  due: string
+  last_reviewed_at: number | null
+}
+
+function rowToState(r: ProgressRow): SchedulingState {
+  return {
+    cardId: r.card_id,
+    ease: r.ease,
+    interval: r.interval,
+    repetitions: r.repetitions,
+    due: r.due,
+    lastReviewedAt: r.last_reviewed_at,
+  }
+}
+
+function stateToRow(s: SchedulingState): ProgressRow {
+  return {
+    card_id: s.cardId,
+    ease: s.ease,
+    interval: s.interval,
+    repetitions: s.repetitions,
+    due: s.due,
+    last_reviewed_at: s.lastReviewedAt,
+  }
+}
+
+export async function loadProgress(): Promise<ProgressMap> {
+  if (IS_TAURI) {
+    const map = await invoke<Record<string, ProgressRow>>('get_progress')
+    const result: ProgressMap = {}
+    for (const [k, v] of Object.entries(map)) {
+      result[k] = rowToState(v)
+    }
+    return result
+  }
+  const map = lsRead<ProgressMap>(LS_KEYS.progress, {})
   const clean: ProgressMap = {}
   for (const [cardId, state] of Object.entries(map)) {
-    if (state && typeof state.cardId === 'string') {
-      clean[cardId] = state
-    }
+    if (state && typeof state.cardId === 'string') clean[cardId] = state
   }
   return clean
 }
 
-export function saveProgress(progress: ProgressMap): void {
-  writeJSON(STORAGE_KEYS.progress, progress)
+export async function saveProgress(progress: ProgressMap): Promise<void> {
+  if (IS_TAURI) {
+    for (const state of Object.values(progress)) {
+      await invoke('save_progress', { progress: stateToRow(state) })
+    }
+    return
+  }
+  lsWrite(LS_KEYS.progress, progress)
 }
 
-/** Ensure a progress entry exists for the given card (new cards start due today). */
-export function ensureProgress(progress: ProgressMap, cardId: string): ProgressMap {
+export async function saveOneProgress(state: SchedulingState): Promise<void> {
+  if (IS_TAURI) {
+    await invoke('save_progress', { progress: stateToRow(state) })
+    return
+  }
+  const map = lsRead<ProgressMap>(LS_KEYS.progress, {})
+  map[state.cardId] = state
+  lsWrite(LS_KEYS.progress, map)
+}
+
+export async function deleteOneProgress(cardId: string): Promise<void> {
+  if (IS_TAURI) {
+    await invoke('delete_progress', { cardId })
+    return
+  }
+  const map = lsRead<ProgressMap>(LS_KEYS.progress, {})
+  delete map[cardId]
+  lsWrite(LS_KEYS.progress, map)
+}
+
+export function ensureProgressSync(progress: ProgressMap, cardId: string): ProgressMap {
   if (progress[cardId]) return progress
-  return { ...progress, [cardId]: initialState(cardId, nowKey()) }
+  return { ...progress, [cardId]: initialState(cardId, todayKey()) }
 }
 
-// --- settings --------------------------------------------------------------
+// ── Settings ────────────────────────────────────────────────────────────
 
-export function loadSettings(): Settings {
-  return { ...DEFAULT_SETTINGS, ...readJSON<Partial<Settings>>(STORAGE_KEYS.settings, {}) }
+export const DEFAULT_SETTINGS: Settings = { newCardsPerDay: 10 }
+
+export async function loadSettings(): Promise<Settings> {
+  if (IS_TAURI) {
+    const val = await invoke<string | null>('get_setting', { key: 'new_cards_per_day' })
+    return { newCardsPerDay: val ? parseInt(val, 10) : DEFAULT_SETTINGS.newCardsPerDay }
+  }
+  return { ...DEFAULT_SETTINGS, ...lsRead<Partial<Settings>>(LS_KEYS.settings, {}) }
 }
 
-export function saveSettings(settings: Settings): void {
-  writeJSON(STORAGE_KEYS.settings, settings)
+export async function saveSettings(settings: Settings): Promise<void> {
+  if (IS_TAURI) {
+    await invoke('set_setting', { key: 'new_cards_per_day', value: String(settings.newCardsPerDay) })
+    return
+  }
+  lsWrite(LS_KEYS.settings, settings)
 }
 
-// --- meta (cross-session bookkeeping, e.g. new-cards-issued-today) ---------
+// ── Meta ────────────────────────────────────────────────────────────────
 
 export interface Meta {
-  /** Date key when last new-cards budget was granted. */
   newCardsDate: string
-  /** Number of new cards already issued on newCardsDate. */
   newCardsIssued: number
 }
 
 const DEFAULT_META: Meta = { newCardsDate: '', newCardsIssued: 0 }
 
-export function loadMeta(): Meta {
-  const meta = readJSON<Partial<Meta>>(STORAGE_KEYS.meta, {})
+export async function loadMeta(): Promise<Meta> {
+  if (IS_TAURI) {
+    const all = await invoke<Record<string, string>>('get_all_settings')
+    return {
+      newCardsDate: all['meta_new_cards_date'] ?? '',
+      newCardsIssued: all['meta_new_cards_issued'] ? parseInt(all['meta_new_cards_issued'], 10) : 0,
+    }
+  }
+  const meta = lsRead<Partial<Meta>>(LS_KEYS.meta, {})
   return { ...DEFAULT_META, ...meta }
 }
 
-export function saveMeta(meta: Meta): void {
-  writeJSON(STORAGE_KEYS.meta, meta)
+export async function saveMeta(meta: Meta): Promise<void> {
+  if (IS_TAURI) {
+    await invoke('set_setting', { key: 'meta_new_cards_date', value: meta.newCardsDate })
+    await invoke('set_setting', { key: 'meta_new_cards_issued', value: String(meta.newCardsIssued) })
+    return
+  }
+  lsWrite(LS_KEYS.meta, meta)
 }
 
-// --- LLM config (OpenAI-compatible API credentials) ------------------------
+// ── LLM Config ──────────────────────────────────────────────────────────
 
-export function loadLLMConfig(): LLMConfig | null {
-  const cfg = readJSON<Partial<LLMConfig>>(STORAGE_KEYS.llmConfig, {})
+export async function loadLLMConfig(): Promise<LLMConfig | null> {
+  if (IS_TAURI) {
+    const all = await invoke<Record<string, string>>('get_all_settings')
+    const baseURL = all['llm_base_url']
+    const apiKey = all['llm_api_key']
+    const model = all['llm_model']
+    if (!baseURL || !apiKey || !model) return null
+    return { baseURL, apiKey, model }
+  }
+  const cfg = lsRead<Partial<LLMConfig>>(LS_KEYS.llmConfig, {})
   if (!cfg.baseURL || !cfg.apiKey || !cfg.model) return null
   return cfg as LLMConfig
 }
 
-export function saveLLMConfig(config: LLMConfig): void {
-  writeJSON(STORAGE_KEYS.llmConfig, config)
-}
-
-// --- hidden built-in cards (soft-delete for static wordbank cards) ----------
-
-export function loadHiddenBuiltins(): Set<string> {
-  const ids = readJSON<string[]>(STORAGE_KEYS.hiddenBuiltins, [])
-  return new Set(ids)
-}
-
-export function saveHiddenBuiltins(ids: Set<string>): void {
-  writeJSON(STORAGE_KEYS.hiddenBuiltins, [...ids])
-}
-
-export function hideBuiltinCard(cardId: string): void {
-  const hidden = loadHiddenBuiltins()
-  hidden.add(cardId)
-  saveHiddenBuiltins(hidden)
+export async function saveLLMConfig(config: LLMConfig): Promise<void> {
+  if (IS_TAURI) {
+    await invoke('set_setting', { key: 'llm_base_url', value: config.baseURL })
+    await invoke('set_setting', { key: 'llm_api_key', value: config.apiKey })
+    await invoke('set_setting', { key: 'llm_model', value: config.model })
+    return
+  }
+  lsWrite(LS_KEYS.llmConfig, config)
 }
