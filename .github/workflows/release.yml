@@ -11,11 +11,10 @@ on:
         description: 'Existing tag to build (e.g. v0.1.0)'
         required: true
 
-permissions:
-  contents: write
-
 jobs:
   build-tauri:
+    permissions:
+      contents: write
     name: Build (${{ matrix.label }})
     strategy:
       fail-fast: false
