@@ -58,7 +58,10 @@ jobs:
       - name: Build & publish via tauri-action
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Falls back to GITHUB_TOKEN if RELEASE_TOKEN secret is not set.
+          # Use a PAT (RELEASE_TOKEN) when the repo/org permissions block the
+          # default token from creating releases.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: 'Vibe Word ${{ github.event.inputs.tag || github.ref_name }}'
