@@ -11,19 +11,15 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Opt into Node.js 24 for JavaScript actions (Node 20 deprecated 2026-06-16).
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-
 jobs:
   frontend:
     name: Frontend (typecheck + build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
@@ -41,7 +37,7 @@ jobs:
     name: Rust (cargo check)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Linux build deps for Tauri
         run: |
