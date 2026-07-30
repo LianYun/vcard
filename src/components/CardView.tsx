@@ -21,14 +21,14 @@ export function CardView({ card, flipped, onFlipChange }: Props) {
       role="button"
       tabIndex={0}
       onClick={toggle}
-      className="group relative w-full cursor-pointer select-none rounded-3xl bg-white shadow-xl ring-1 ring-slate-200 transition-all hover:shadow-2xl min-h-[18rem] flex flex-col items-center justify-center px-8 py-10 text-center"
+      className="app-surface group relative flex min-h-[18rem] w-full cursor-pointer select-none flex-col items-center justify-center px-6 py-10 text-center transition hover:border-slate-300 sm:px-8"
       aria-label="点击翻面"
     >
-      <div className="absolute top-4 left-5 text-xs font-medium uppercase tracking-wide text-slate-400">
+      <div className="absolute left-5 top-4 text-xs font-semibold text-slate-400">
         {flipped ? '释义' : '单词'}
       </div>
 
-      <div className="absolute top-3 right-4" data-no-flip>
+      <div className="absolute right-4 top-3" data-no-flip>
         {!flipped ? (
           <SpeakButton
             text={card.front}
@@ -43,17 +43,17 @@ export function CardView({ card, flipped, onFlipChange }: Props) {
       </div>
 
       {!flipped ? (
-        <div className="space-y-2">
-          <Markdown content={card.front} className="text-3xl font-bold tracking-wide text-slate-800 sm:text-4xl" />
+        <div className="max-w-full space-y-3">
+          <Markdown content={card.front} className="break-words text-3xl font-bold text-slate-900 sm:text-4xl" />
           <p className="text-sm text-slate-400">空格 / 点击查看释义</p>
         </div>
       ) : (
-        <div className="w-full space-y-3">
-          <h3 className="text-2xl font-semibold text-brand-600">{card.front}</h3>
-          <Markdown content={card.back} className="text-left text-base text-slate-700" />
+        <div className="w-full space-y-4">
+          <h3 className="break-words text-2xl font-semibold text-brand-700">{card.front}</h3>
+          <Markdown content={card.back} className="text-left text-base leading-7 text-slate-700" />
           {card.example && (
-            <div className="mt-3 flex max-w-prose items-center gap-1" data-no-flip>
-              <p className="text-sm italic text-slate-500">
+            <div className="app-surface-muted mt-3 flex max-w-prose items-center gap-2 px-3 py-2 text-left" data-no-flip>
+              <p className="text-sm italic leading-6 text-slate-500">
                 {card.example}
               </p>
               <SpeakButton text={card.example} lang="en" className="shrink-0" />

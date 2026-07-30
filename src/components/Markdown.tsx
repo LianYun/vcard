@@ -30,7 +30,7 @@ export function Markdown({ content, className = '' }: Props) {
 
   return (
     <div
-      className={`prose prose-sm prose-slate max-w-none ${className}`}
+      className={`prose prose-sm prose-slate max-w-none [&_img]:max-h-48 [&_img]:w-auto [&_img]:rounded-lg [&_img]:mx-auto ${className}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )

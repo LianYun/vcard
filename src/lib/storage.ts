@@ -1,7 +1,7 @@
 // Storage layer: Tauri → SQLite (~/.vword/vword.db), browser → localStorage fallback.
 
 import { invoke as tauriInvoke } from '@tauri-apps/api/core'
-import type { Card, LLMConfig, ProgressMap, SchedulingState, Settings } from '../types'
+import type { Card, ImageGenConfig, LLMConfig, ProgressMap, SchedulingState, Settings } from '../types'
 import { createLogger } from './log'
 import { initialState } from './sm2'
 import { todayKey } from './date'
@@ -30,6 +30,7 @@ const LS_KEYS = {
   settings: 'vibe-word:settings:v1',
   meta: 'vibe-word:meta:v1',
   llmConfig: 'vibe-word:llm:v1',
+  imageConfig: 'vibe-word:image-gen:v1',
   dailyStats: 'vibe-word:daily-stats:v1',
 } as const
 
@@ -296,6 +297,32 @@ export async function saveLLMConfig(config: LLMConfig): Promise<void> {
     return
   }
   lsWrite(LS_KEYS.llmConfig, config)
+}
+
+// ── Image Generation Config ─────────────────────────────────────────────
+
+export async function loadImageGenConfig(): Promise<ImageGenConfig | null> {
+  if (IS_TAURI) {
+    const all = await invoke<Record<string, string>>('get_all_settings')
+    const baseURL = all['image_base_url']
+    const apiKey = all['image_api_key']
+    const model = all['image_model']
+    if (!baseURL || !apiKey || !model) return null
+    return { baseURL, apiKey, model }
+  }
+  const cfg = lsRead<Partial<ImageGenConfig>>(LS_KEYS.imageConfig, {})
+  if (!cfg.baseURL || !cfg.apiKey || !cfg.model) return null
+  return cfg as ImageGenConfig
+}
+
+export async function saveImageGenConfig(config: ImageGenConfig): Promise<void> {
+  if (IS_TAURI) {
+    await invoke('set_setting', { key: 'image_base_url', value: config.baseURL })
+    await invoke('set_setting', { key: 'image_api_key', value: config.apiKey })
+    await invoke('set_setting', { key: 'image_model', value: config.model })
+    return
+  }
+  lsWrite(LS_KEYS.imageConfig, config)
 }
 
 // ── Daily Stats ─────────────────────────────────────────────────────────

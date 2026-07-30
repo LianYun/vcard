@@ -44,9 +44,9 @@ export function StatsBar({ refreshKey }: Props) {
 
 function Stat({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
-    <div className="rounded-2xl bg-white p-4 text-center shadow-sm ring-1 ring-slate-200">
+    <div className="app-surface px-3 py-4 text-center">
       <div className={`text-2xl font-bold ${accent}`}>{value}</div>
-      <div className="mt-0.5 text-xs text-slate-500">{label}</div>
+      <div className="mt-1 text-xs font-medium text-slate-500">{label}</div>
     </div>
   )
 }

@@ -63,3 +63,17 @@ export interface LLMConfig {
   /** Model name, e.g. gpt-4o-mini, deepseek-chat. */
   model: string
 }
+
+/**
+ * User-configured image-generation API connection (OpenAI-compatible
+ * /images/generations). Kept separate from LLMConfig because image models often
+ * live on a different provider or endpoint.
+ */
+export interface ImageGenConfig {
+  /** API base URL, e.g. https://api.openai.com/v1 */
+  baseURL: string
+  /** API key / bearer token. */
+  apiKey: string
+  /** Image model name, e.g. dall-e-3, flux.1-dev. */
+  model: string
+}

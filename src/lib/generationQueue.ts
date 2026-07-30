@@ -5,8 +5,8 @@
 
 import type { LLMConfig } from '../types'
 import { addCard } from './cardStore'
-import { generateCards } from './llm'
-import { ensureProgressSync, loadProgress, saveOneProgress } from './storage'
+import { generateCardsWithImage } from './llm'
+import { ensureProgressSync, loadImageGenConfig, loadProgress, saveOneProgress } from './storage'
 
 export type TaskStatus = 'queued' | 'running' | 'done' | 'failed'
 
@@ -102,7 +102,10 @@ class GenerationQueue {
     this.notify()
 
     try {
-      const result = await generateCards(task.word, llmConfig, ac.signal)
+      // Lazy-load image config per run so setting changes take effect immediately
+      // (no stale reference held in the queue).
+      const imageConfig = await loadImageGenConfig()
+      const result = await generateCardsWithImage(task.word, llmConfig, imageConfig, ac.signal)
       const card1 = await addCard(result.enToCn.front, result.enToCn.back, result.enToCn.example)
       const card2 = await addCard(result.cnToEn.front, result.cnToEn.back, result.cnToEn.example)
 

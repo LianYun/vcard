@@ -108,11 +108,11 @@ export function ActivityHeatmap({ refreshKey = 0 }: Props) {
   const height = DAYS_PER_WEEK * (CELL + GAP)
 
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-700">学习记录</h3>
-        <div className="flex gap-3 text-xs text-slate-500">
-          <span>🔥 连续 <span className="font-semibold text-orange-600">{totals.streak}</span> 天</span>
+    <div className="app-surface p-4">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="text-sm font-semibold text-slate-800">学习记录</h3>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+          <span>连续 <span className="font-semibold text-orange-600">{totals.streak}</span> 天</span>
           <span>累计 <span className="font-semibold text-slate-700">{totals.activeDays}</span> 天</span>
           <span>复习 <span className="font-semibold text-slate-700">{totals.totalReviewed}</span></span>
           <span>新增 <span className="font-semibold text-slate-700">{totals.totalAdded}</span></span>

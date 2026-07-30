@@ -250,12 +250,12 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索单词、释义或例句…"
-          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 pr-9 text-sm text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          className="app-field pr-9"
         />
         {query && (
           <button
             onClick={() => setQuery('')}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
             aria-label="清除搜索"
           >
             ✕
@@ -265,7 +265,7 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-slate-500">
+        <p className="text-sm font-medium text-slate-500">
           {selectMode
             ? `已选 ${selectedIds.size} / ${filteredCards.length}`
             : query.trim()
@@ -278,20 +278,20 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
               <button
                 onClick={toggleSelectAll}
                 disabled={filteredCards.length === 0}
-                className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-200 active:scale-95 disabled:opacity-40"
+                className="btn-ghost text-xs"
               >
                 {allSelected ? '取消全选' : '全选'}
               </button>
               <button
                 onClick={handleExport}
                 disabled={selectedIds.size === 0}
-                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 active:scale-95 disabled:opacity-40"
+                className="btn-primary px-3 py-1.5 text-xs"
               >
                 导出选中（{selectedIds.size}）
               </button>
               <button
                 onClick={exitSelectMode}
-                className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-200 active:scale-95"
+                className="btn-secondary px-3 py-1.5 text-xs"
               >
                 退出
               </button>
@@ -301,14 +301,14 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
               <button
                 onClick={enterSelectMode}
                 disabled={filteredCards.length === 0}
-                className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-200 active:scale-95 disabled:opacity-40"
+                className="btn-secondary px-3 py-1.5 text-xs"
               >
                 选择导出
               </button>
               <button
                 onClick={handleExport}
                 disabled={filteredCards.length === 0}
-                className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-200 active:scale-95 disabled:opacity-40"
+                className="btn-secondary px-3 py-1.5 text-xs"
               >
                 {query.trim() ? '导出筛选结果' : '全部导出'}
               </button>
@@ -319,12 +319,12 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
 
       {/* Empty states */}
       {cards.length === 0 && (
-        <p className="rounded-2xl bg-white p-6 text-center text-sm text-slate-400 ring-1 ring-slate-200">
+        <p className="app-surface-muted p-6 text-center text-sm text-slate-500">
           还没有卡片，先去「添加」页面创建吧
         </p>
       )}
       {cards.length > 0 && filteredCards.length === 0 && (
-        <p className="rounded-2xl bg-white p-6 text-center text-sm text-slate-400 ring-1 ring-slate-200">
+        <p className="app-surface-muted p-6 text-center text-sm text-slate-500">
           没有匹配「{query}」的卡片
         </p>
       )}
@@ -355,7 +355,7 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
               <button
                 type="button"
                 onClick={() => toggleGroup(group.label)}
-                className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition hover:bg-slate-100"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-slate-200/70"
                 aria-expanded={open}
               >
                 <svg
@@ -371,7 +371,7 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
                   />
                 </svg>
                 <h3 className="text-sm font-semibold text-slate-700">{group.label}</h3>
-                <span className="text-xs text-slate-400">{group.cards.length}</span>
+                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-500">{group.cards.length}</span>
               </button>
               {open && (
                 <ul className="space-y-2">
@@ -387,18 +387,18 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
                           else cardRefs.current.delete(card.id)
                         }}
                         onClick={selectMode && !isEditing ? () => toggleSelected(card.id) : undefined}
-                        className={`rounded-2xl bg-white p-4 shadow-sm ring-1 transition-all duration-500 ${
+                        className={`app-surface p-4 transition-all duration-500 ${
                           isFlashing
-                            ? 'ring-2 ring-emerald-400 bg-emerald-50'
+                            ? 'border-emerald-300 bg-emerald-50'
                             : isSelected
-                            ? 'ring-2 ring-brand-500 bg-brand-50'
-                            : 'ring-slate-200'
+                            ? 'border-brand-300 bg-brand-50'
+                            : 'hover:border-slate-300'
                         } ${selectMode && !isEditing ? 'cursor-pointer' : ''}`}
                       >
                     {isEditing ? (
                       <div className="space-y-2">
                         <input
-                          className="w-full rounded-lg border border-slate-300 px-2 py-1"
+                          className="app-field"
                           value={draft.front}
                           onChange={(e) => setDraft({ ...draft, front: e.target.value })}
                           placeholder="正面"
@@ -408,7 +408,7 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
                           onChange={(md) => setDraft({ ...draft, back: md })}
                         />
                         <input
-                          className="w-full rounded-lg border border-slate-300 px-2 py-1"
+                          className="app-field"
                           value={draft.example}
                           onChange={(e) => setDraft({ ...draft, example: e.target.value })}
                           placeholder="例句"
@@ -416,13 +416,13 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
                         <div className="flex gap-2">
                           <button
                             onClick={() => commitEdit(card)}
-                            className="rounded-lg bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-700"
+                            className="btn-primary px-3 py-1.5"
                           >
                             保存
                           </button>
                           <button
                             onClick={() => setEditingId(null)}
-                            className="rounded-lg bg-slate-200 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-300"
+                            className="btn-secondary px-3 py-1.5"
                           >
                             取消
                           </button>
@@ -441,15 +441,15 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
                         )}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-slate-800">{card.front}</span>
+                            <span className="break-words font-semibold text-slate-900">{card.front}</span>
                             {/^[a-zA-Z]/.test(card.front) && (
                               <SpeakButton text={card.front} lang="en" />
                             )}
                           </div>
-                          <Markdown content={card.back} className="mt-0.5 text-slate-600" />
+                          <Markdown content={card.back} className="mt-1 text-sm leading-6 text-slate-600" />
                           {card.example && (
-                            <div className="mt-1 flex items-center gap-1">
-                              <p className="text-sm italic text-slate-400">{card.example}</p>
+                            <div className="mt-2 flex items-center gap-1">
+                              <p className="text-sm italic leading-6 text-slate-500">{card.example}</p>
                               <SpeakButton text={card.example} lang="en" className="shrink-0" />
                             </div>
                           )}
@@ -458,13 +458,13 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
                           <div className="flex shrink-0 flex-col gap-1">
                             <button
                               onClick={() => startEdit(card)}
-                              className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                              className="btn-ghost px-2.5 py-1 text-xs"
                             >
                               编辑
                             </button>
                             <button
                               onClick={() => handleDelete(card)}
-                              className="rounded-lg bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-200"
+                              className="btn-danger px-2.5 py-1 text-xs"
                             >
                               删除
                             </button>

@@ -41,7 +41,7 @@ function shuffle<T>(arr: T[]): T[] {
 /**
  * Compute today's study queue.
  *
- * @param cards    all known cards (built-in + custom)
+ * @param cards    all user-created cards
  * @param progress per-card scheduling state
  * @param settings user settings (newCardsPerDay budget)
  * @param meta     session bookkeeping (new-cards-issued-today)

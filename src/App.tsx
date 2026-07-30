@@ -29,13 +29,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-bold tracking-tight">
+    <div className="app-page">
+      <header className="border-b border-slate-200 bg-white/90 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <h1 className="text-lg font-bold">
             Vibe <span className="text-brand-600">Word</span>
           </h1>
-          <nav className="flex gap-1">
+          <nav className="grid grid-cols-4 rounded-xl bg-slate-100 p-1">
             {TABS.map((t) => (
               <button
                 key={t.key}
@@ -43,10 +43,10 @@ export default function App() {
                   setTab(t.key)
                   bump()
                 }}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
                   tab === t.key
-                    ? 'bg-brand-600 text-white'
-                    : 'text-slate-600 hover:bg-slate-100'
+                    ? 'bg-white text-brand-700 shadow-sm'
+                    : 'text-slate-600 hover:bg-white/70 hover:text-slate-900'
                 }`}
               >
                 {t.label}
@@ -56,7 +56,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-6">
+      <main className="app-container">
         {tab === 'study' && <StudyPage />}
         {tab === 'add' && <AddCardForm onAdded={bump} onJumpToCard={jumpToCard} />}
         {tab === 'cards' && (

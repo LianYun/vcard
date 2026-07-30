@@ -70,18 +70,18 @@ export function AddCardForm({ onAdded, onJumpToCard }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-3xl bg-white p-6 shadow-md ring-1 ring-slate-200">
+      <div className="app-surface p-5 sm:p-6">
         <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label className="mb-1 block text-sm font-semibold text-slate-700">
             单词 / 正面 <span className="text-rose-500">*</span>
           </label>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <input
               type="text"
               value={front}
               onChange={(e) => setFront(e.target.value)}
               placeholder="例如：serendipity"
-              className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2 text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              className="app-field min-w-0 flex-1"
               autoFocus
             />
             {llmConfig && (
@@ -89,19 +89,19 @@ export function AddCardForm({ onAdded, onJumpToCard }: Props) {
                 type="button"
                 disabled={!front.trim()}
                 onClick={handleGenerate}
-                className="shrink-0 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-violet-700 active:scale-95 disabled:opacity-40"
+                className="btn-secondary shrink-0"
               >
                 AI 生成（后台）
               </button>
             )}
           </div>
           {!llmConfig && (
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-2 text-xs leading-5 text-slate-500">
               在设置页配置 AI 模型后，可一键生成释义、词源、例句等
             </p>
           )}
           {enqueued && (
-            <p className="mt-2 text-xs text-emerald-600">
+            <p className="status-info mt-2">
               已加入后台队列：「{enqueued}」，可继续提交下一个
             </p>
           )}
@@ -109,34 +109,34 @@ export function AddCardForm({ onAdded, onJumpToCard }: Props) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label className="mb-1 block text-sm font-semibold text-slate-700">
               释义 / 背面
             </label>
             <MarkdownEditor value={back} onChange={setBack} />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">例句（可选）</label>
+            <label className="mb-1 block text-sm font-semibold text-slate-700">例句（可选）</label>
             <input
               type="text"
               value={example}
               onChange={(e) => setExample(e.target.value)}
               placeholder="例如：Finding this café was pure serendipity."
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              className="app-field"
             />
           </div>
 
           <button
             type="submit"
-            className="rounded-xl bg-brand-600 px-5 py-2.5 font-semibold text-white shadow-md transition hover:bg-brand-700 active:scale-95"
+            className="btn-primary"
           >
             手动添加
           </button>
         </form>
 
-        {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+        {error && <p className="status-error mt-3">{error}</p>}
         {lastAdded && !error && (
-          <p className="mt-3 text-sm text-emerald-600">已添加：「{lastAdded}」</p>
+          <p className="status-success mt-3">已添加：「{lastAdded}」</p>
         )}
       </div>
 

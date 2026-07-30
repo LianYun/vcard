@@ -49,19 +49,28 @@ export function StudyPage() {
   }, [queue, flipped])
 
   if (!queue.ready) {
-    return <p className="text-center text-slate-500">准备中…</p>
+    return (
+      <div className="app-surface-muted p-8 text-center">
+        <p className="section-copy">准备中…</p>
+      </div>
+    )
   }
 
   if (queue.finished) {
     return (
-      <div className="space-y-5 text-center">
-        <h2 className="text-2xl font-bold text-slate-800">🎉 今日学习完成！</h2>
-        <p className="text-slate-500">
+      <div className="app-surface space-y-5 p-8 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-xl font-bold text-emerald-700">
+          ✓
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-slate-900">今日学习完成</h2>
+          <p className="section-copy">
           共完成 {queue.done} 张，其中重学 {queue.relearned} 次。明天见。
-        </p>
+          </p>
+        </div>
         <button
           onClick={() => queue.reset()}
-          className="rounded-xl bg-slate-200 px-5 py-2.5 font-medium text-slate-700 hover:bg-slate-300"
+          className="btn-secondary"
         >
           重新检查
         </button>
@@ -78,8 +87,8 @@ export function StudyPage() {
       <CardView card={card} flipped={flipped} onFlipChange={setFlipped} />
 
       {!flipped ? (
-        <p className="text-center text-sm text-slate-400">
-          按 <kbd className="rounded bg-slate-200 px-1.5 py-0.5 text-xs">Space</kbd> 或点击卡片查看释义
+        <p className="text-center text-sm text-slate-500">
+          按 <kbd className="kbd-token">Space</kbd> 或点击卡片查看释义
         </p>
       ) : (
         <ReviewButtons

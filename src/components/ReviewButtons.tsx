@@ -15,6 +15,7 @@ interface ButtonDef {
   hint: string
   shortcut: string
   classes: string
+  kbd: string
 }
 
 export const BUTTON_SHORTCUTS: Record<string, ReviewButton> = {
@@ -25,10 +26,10 @@ export const BUTTON_SHORTCUTS: Record<string, ReviewButton> = {
 }
 
 const BUTTONS: ButtonDef[] = [
-  { key: 'again', label: '重来', hint: '<1分钟', shortcut: 'A', classes: 'bg-rose-500 hover:bg-rose-600' },
-  { key: 'hard', label: '困难', hint: '~10分钟', shortcut: 'S', classes: 'bg-orange-500 hover:bg-orange-600' },
-  { key: 'good', label: '良好', hint: '明天', shortcut: 'D', classes: 'bg-sky-500 hover:bg-sky-600' },
-  { key: 'easy', label: '简单', hint: '后天+', shortcut: 'E', classes: 'bg-emerald-500 hover:bg-emerald-600' },
+  { key: 'again', label: '重来', hint: '<1分钟', shortcut: 'A', classes: 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100', kbd: 'border-rose-200 bg-white text-rose-600' },
+  { key: 'hard', label: '困难', hint: '~10分钟', shortcut: 'S', classes: 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100', kbd: 'border-amber-200 bg-white text-amber-700' },
+  { key: 'good', label: '良好', hint: '明天', shortcut: 'D', classes: 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100', kbd: 'border-sky-200 bg-white text-sky-600' },
+  { key: 'easy', label: '简单', hint: '后天+', shortcut: 'E', classes: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100', kbd: 'border-emerald-200 bg-white text-emerald-600' },
 ]
 
 export function ReviewButtons({ onReview, disabled }: Props) {
@@ -40,13 +41,13 @@ export function ReviewButtons({ onReview, disabled }: Props) {
           type="button"
           disabled={disabled}
           onClick={() => onReview(b.key)}
-          className={`flex flex-col items-center rounded-2xl px-4 py-3 font-semibold text-white shadow-md transition active:scale-95 disabled:opacity-40 ${b.classes}`}
+          className={`flex min-h-20 flex-col items-center justify-center rounded-2xl border px-4 py-3 font-semibold shadow-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${b.classes}`}
         >
           <span className="text-base">
             {b.label}
-            <kbd className="ml-1.5 rounded bg-white/25 px-1.5 py-0.5 text-xs font-normal">{b.shortcut}</kbd>
+            <kbd className={`ml-1.5 rounded-md border px-1.5 py-0.5 text-xs font-semibold ${b.kbd}`}>{b.shortcut}</kbd>
           </span>
-          <span className="text-xs font-normal opacity-90">{b.hint}</span>
+          <span className="text-xs font-medium opacity-80">{b.hint}</span>
         </button>
       ))}
     </div>

@@ -5,9 +5,14 @@
 //   etymology, roots, similar words).
 // Card 2 (cn→en): front = chinese meaning + hint, back = english word.
 //
+// Optional image generation: rewrite the example sentence into a visual prompt
+// (via the text LLM), then call an OpenAI-compatible /images/generations
+// endpoint. On success the image URL is prepended to card 1's back as markdown.
+// Image failures are swallowed — cards are always returned.
+//
 // The function does NOT persist anything — the caller decides whether to save.
 
-import type { Card, LLMConfig } from '../types'
+import type { Card, ImageGenConfig, LLMConfig } from '../types'
 
 const SYSTEM_PROMPT = `你是一个英语词汇学习助手。给定一个英文单词，请返回以下 JSON（不要输出任何其他文字）：
 {
@@ -38,6 +43,8 @@ interface LLMResponse {
 export interface GeneratedCards {
   enToCn: Card
   cnToEn: Card
+  /** The English example sentence used for card 1 (used for image prompt rewriting). */
+  enExample?: string
 }
 
 function buildEnToCnBack(r: LLMResponse): string {
@@ -124,5 +131,133 @@ export async function generateCards(
     example: parsed.example,
   }
 
-  return { enToCn, cnToEn }
+  return { enToCn, cnToEn, enExample: parsed.example }
+}
+
+// ── Image generation (optional) ─────────────────────────────────────────
+
+const IMAGE_REWRITE_PROMPT = `You turn an English example sentence into a concise visual description for a text-to-image model.
+
+Rules:
+- Output ONLY the final English prompt, no explanation, no quotes, no markdown.
+- Describe the concrete scene, subjects, action, and mood from the sentence.
+- Do NOT include readable text, captions, or words in the image.
+- End with this exact style suffix: ", flat illustration, soft pastel colors, centered, no text".`
+
+/**
+ * Rewrite an example sentence into a text-to-image prompt using the text LLM
+ * (reuses the existing LLMConfig). Returns a single-line English prompt.
+ */
+export async function rewritePromptForImage(
+  word: string,
+  example: string,
+  config: LLMConfig,
+  signal?: AbortSignal,
+): Promise<string> {
+  const url = `${config.baseURL.replace(/\/+$/, '')}/chat/completions`
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages: [
+        { role: 'system', content: IMAGE_REWRITE_PROMPT },
+        { role: 'user', content: `Word: ${word}\nExample: ${example}` },
+      ],
+      temperature: 0.7,
+    }),
+    signal,
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Prompt 改写失败 (${res.status}): ${body.slice(0, 200)}`)
+  }
+
+  const json = await res.json()
+  const content: string = (json.choices?.[0]?.message?.content ?? '').toString().trim()
+  if (!content) throw new Error('Prompt 改写返回空内容')
+  // Strip accidental surrounding quotes / code fences.
+  return content.replace(/^["'`]+|["'`]+$/g, '').trim()
+}
+
+interface ImageApiResponse {
+  data?: Array<{ url?: string; b64_json?: string }>
+}
+
+/**
+ * Call an OpenAI-compatible /images/generations endpoint. Returns an image URL
+ * (or a data URL as a fallback when the API only returns base64).
+ */
+export async function generateImage(
+  prompt: string,
+  config: ImageGenConfig,
+  signal?: AbortSignal,
+): Promise<string> {
+  const url = `${config.baseURL.replace(/\/+$/, '')}/images/generations`
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model,
+      prompt,
+      n: 1,
+      size: '1024x1024',
+      response_format: 'url',
+    }),
+    signal,
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`图片生成失败 (${res.status}): ${body.slice(0, 200)}`)
+  }
+
+  const json = (await res.json()) as ImageApiResponse
+  const item = json.data?.[0]
+  if (item?.url) return item.url
+  if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`
+  throw new Error('图片生成响应缺少 url / b64_json 字段')
+}
+
+/**
+ * Generate two flashcards (like generateCards); when imageConfig is provided,
+ * additionally rewrite the example into a prompt and generate an image, then
+ * embed it at the top of the en→cn card's back as markdown.
+ *
+ * Image-generation errors are swallowed — cards are always returned without an
+ * image in that case.
+ */
+export async function generateCardsWithImage(
+  word: string,
+  config: LLMConfig,
+  imageConfig: ImageGenConfig | null,
+  signal?: AbortSignal,
+): Promise<GeneratedCards> {
+  const result = await generateCards(word, config, signal)
+
+  if (!imageConfig || !result.enExample) return result
+
+  try {
+    const prompt = await rewritePromptForImage(word, result.enExample, config, signal)
+    const imageUrl = await generateImage(prompt, imageConfig, signal)
+    result.enToCn = {
+      ...result.enToCn,
+      back: `![${word}](${imageUrl})\n\n${result.enToCn.back}`,
+    }
+  } catch (err) {
+    if (signal?.aborted) throw err
+    // Swallow image errors: keep the card, just without an image.
+    console.warn('[vibe-word] image generation failed, card saved without image:', err)
+  }
+
+  return result
 }
