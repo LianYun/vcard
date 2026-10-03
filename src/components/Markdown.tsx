@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { createLogger } from '../lib/log'
 
 const log = createLogger('markdown')
@@ -21,10 +22,10 @@ export function Markdown({ content, className = '' }: Props) {
       return ''
     }
     try {
-      return marked.parse(content, { async: false }) as string
+      return DOMPurify.sanitize(marked.parse(content, { async: false }) as string)
     } catch (err) {
       log.error('parse failed', err, { content: content.slice(0, 100) })
-      return content
+      return DOMPurify.sanitize(content)
     }
   }, [content])
 

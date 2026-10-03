@@ -13,6 +13,7 @@
 // The function does NOT persist anything — the caller decides whether to save.
 
 import type { Card, ImageGenConfig, LLMConfig } from '../types'
+import { apiFetch } from './android'
 
 const SYSTEM_PROMPT = `你是一个英语词汇学习助手。给定一个英文单词，请返回以下 JSON（不要输出任何其他文字）：
 {
@@ -83,7 +84,7 @@ export async function generateCards(
 ): Promise<GeneratedCards> {
   const url = `${config.baseURL.replace(/\/+$/, '')}/chat/completions`
 
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -101,8 +102,7 @@ export async function generateCards(
   })
 
   if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`API 请求失败 (${res.status}): ${body.slice(0, 200)}`)
+    throw new Error(`API 请求失败 (${res.status})`)
   }
 
   const json = await res.json()
@@ -114,8 +114,10 @@ export async function generateCards(
   let parsed: LLMResponse
   try {
     parsed = JSON.parse(extractJSON(content))
+    const fields: (keyof LLMResponse)[] = ['word', 'phonetic', 'definition', 'example', 'exampleTranslation', 'etymology', 'roots', 'similar', 'chineseHint']
+    if (!parsed || fields.some(key => typeof parsed[key] !== 'string')) throw new Error('Invalid card fields')
   } catch {
-    throw new Error(`无法解析模型返回的 JSON：${content.slice(0, 300)}`)
+    throw new Error('无法解析模型返回的 JSON，请重试')
   }
 
   const enToCn: Card = {
@@ -156,7 +158,7 @@ export async function rewritePromptForImage(
 ): Promise<string> {
   const url = `${config.baseURL.replace(/\/+$/, '')}/chat/completions`
 
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -174,8 +176,7 @@ export async function rewritePromptForImage(
   })
 
   if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`Prompt 改写失败 (${res.status}): ${body.slice(0, 200)}`)
+    throw new Error(`Prompt 改写失败 (${res.status})`)
   }
 
   const json = await res.json()
@@ -200,7 +201,7 @@ export async function generateImage(
 ): Promise<string> {
   const url = `${config.baseURL.replace(/\/+$/, '')}/images/generations`
 
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -217,8 +218,7 @@ export async function generateImage(
   })
 
   if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`图片生成失败 (${res.status}): ${body.slice(0, 200)}`)
+    throw new Error(`图片生成失败 (${res.status})`)
   }
 
   const json = (await res.json()) as ImageApiResponse

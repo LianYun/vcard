@@ -1,20 +1,21 @@
 // Text-to-speech via the Web Speech API (speechSynthesis).
 // Falls back gracefully when the API is unavailable.
+import { android } from './android'
 
 export function isSupported(): boolean {
-  return typeof window !== 'undefined' && 'speechSynthesis' in window
+  return !!android || (typeof window !== 'undefined' && 'speechSynthesis' in window)
 }
 
 let cachedVoices: SpeechSynthesisVoice[] = []
 
 function loadVoices(): SpeechSynthesisVoice[] {
-  if (!isSupported()) return []
+  if (android || !isSupported()) return []
   const voices = window.speechSynthesis.getVoices()
   if (voices.length > 0) cachedVoices = voices
   return cachedVoices
 }
 
-if (isSupported()) {
+if (!android && isSupported()) {
   loadVoices()
   window.speechSynthesis.onvoiceschanged = () => { loadVoices() }
 }
@@ -40,6 +41,7 @@ function pickVoice(lang: 'en' | 'zh'): SpeechSynthesisVoice | undefined {
 }
 
 export function speak(text: string, lang: 'en' | 'zh' = 'en'): void {
+  if (android) { android.speak(text, lang); return }
   if (!isSupported()) return
   window.speechSynthesis.cancel()
 
@@ -56,6 +58,7 @@ export function speak(text: string, lang: 'en' | 'zh' = 'en'): void {
 }
 
 export function stop(): void {
+  if (android) { android.stopSpeech(); return }
   if (!isSupported()) return
   window.speechSynthesis.cancel()
 }

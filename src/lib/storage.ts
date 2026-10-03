@@ -47,7 +47,7 @@ function lsRead<T>(key: string, fallback: T): T {
 function lsWrite(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value))
-  } catch { /* ignore */ }
+  } catch { throw new Error('本地保存失败，存储空间可能不足，请导出备份后清理空间') }
 }
 
 // ── Cards ───────────────────────────────────────────────────────────────
@@ -130,11 +130,13 @@ export async function updateOneCard(
 }
 
 export async function deleteOneCard(id: string): Promise<boolean> {
+  // SQLite deletes progress through its ON DELETE CASCADE foreign key.
   if (IS_TAURI) return invoke<boolean>('delete_card', { id })
   const cards = lsRead<Card[]>(LS_KEYS.cards, [])
   const next = cards.filter((c) => c.id !== id)
   if (next.length === cards.length) return false
   lsWrite(LS_KEYS.cards, next)
+  await deleteOneProgress(id)
   return true
 }
 

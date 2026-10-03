@@ -15,6 +15,7 @@
 //   (blank line between cards)
 
 import type { Card } from '../types'
+import { android } from './android'
 
 /**
  * Strip blank lines inside a card's body. Multiple consecutive blank lines
@@ -52,6 +53,7 @@ export function cardsToObsidianMd(cards: Card[]): string {
 }
 
 export function downloadMarkdown(content: string, filename: string): void {
+  if (android) { android.exportMarkdown(content, filename); return }
   const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

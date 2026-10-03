@@ -1,0 +1,374 @@
+// !$*UTF8*$!
+{
+"archiveVersion" = "1";
+"classes" = {
+};
+"objectVersion" = "56";
+"objects" = {
+"A4BF39B3DB20411D6F87B73C" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/App/AddView.swift";
+"sourceTree" = "<group>";
+};
+"746601C89054B677BDDEFD02" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "A4BF39B3DB20411D6F87B73C";
+};
+"AA356EEA70DEAF88D0D6328C" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/App/AppStore.swift";
+"sourceTree" = "<group>";
+};
+"47C2BE21283E87890B9A7E7C" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "AA356EEA70DEAF88D0D6328C";
+};
+"A1E318035A5E07D0618D598D" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/App/CardsView.swift";
+"sourceTree" = "<group>";
+};
+"296703179176CA38BD9317A0" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "A1E318035A5E07D0618D598D";
+};
+"C0ED7D68720BD64C572CA835" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/App/MarkdownView.swift";
+"sourceTree" = "<group>";
+};
+"4F24676B5397CA7C5B1338F2" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "C0ED7D68720BD64C572CA835";
+};
+"16B6B6EBAFE62C14AE028A33" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/App/Persistence.swift";
+"sourceTree" = "<group>";
+};
+"A2393E7B503CAD65B3A2D177" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "16B6B6EBAFE62C14AE028A33";
+};
+"5B58D66268436358BED2A5ED" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/App/SettingsView.swift";
+"sourceTree" = "<group>";
+};
+"C441F9052B56C0BA41E95573" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "5B58D66268436358BED2A5ED";
+};
+"72EBD132783FF2C6A36D18C4" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/App/StudyView.swift";
+"sourceTree" = "<group>";
+};
+"FBB3C77C9C2EBD6477D1C75D" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "72EBD132783FF2C6A36D18C4";
+};
+"A423304B124D22963FE41082" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/App/VibeWordApp.swift";
+"sourceTree" = "<group>";
+};
+"684D48C65961E63721D638E2" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "A423304B124D22963FE41082";
+};
+"D95E71A58B0B41E69CC996C8" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/Core/GenerationService.swift";
+"sourceTree" = "<group>";
+};
+"7B9FC97F833CE1BFE7E252EC" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "D95E71A58B0B41E69CC996C8";
+};
+"9EEFA85BF56D76783C46942D" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/Core/Models.swift";
+"sourceTree" = "<group>";
+};
+"FA0A34BF6E5C165AA6DCD223" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "9EEFA85BF56D76783C46942D";
+};
+"34B7CCFCB594A8336AE657B6" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/Core/Prompts.swift";
+"sourceTree" = "<group>";
+};
+"89D4BDA3E8BF71C3048B00E5" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "34B7CCFCB594A8336AE657B6";
+};
+"D9617B06CA4BB1FBE9CA8B57" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "VibeWord/Core/SyncEvent.swift";
+"sourceTree" = "<group>";
+};
+"BAC487E72C471AE7C5A356AE" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "D9617B06CA4BB1FBE9CA8B57";
+};
+"CB86E7ABE6D5F8DECC8A7490" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "folder.assetcatalog";
+"path" = "VibeWord/Resources/Assets.xcassets";
+"sourceTree" = "<group>";
+};
+"CF8A4D27E1C506A7C75A76BE" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "CB86E7ABE6D5F8DECC8A7490";
+};
+"106C92BC3544A15B0B095C69" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "text.plist.xml";
+"path" = "VibeWord/Info.plist";
+"sourceTree" = "<group>";
+};
+"677CB7A782311C6C86E965CF" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "text.plist.entitlements";
+"path" = "VibeWord/VibeWord.entitlements";
+"sourceTree" = "<group>";
+};
+"38A007151ABE87CC01A5B6E9" = {
+"isa" = "PBXFileReference";
+"explicitFileType" = "wrapper.application";
+"path" = "VibeWord.app";
+"sourceTree" = "BUILT_PRODUCTS_DIR";
+"includeInIndex" = "0";
+};
+"FBDC4F23F93125BBEEAE800C" = {
+"isa" = "PBXGroup";
+"children" = ("38A007151ABE87CC01A5B6E9","9D3AD977850B7EAC0E4F6585");
+"name" = "Products";
+"sourceTree" = "<group>";
+};
+"64292B1C2B2E13EAD8788FC8" = {
+"isa" = "PBXGroup";
+"children" = ("A4BF39B3DB20411D6F87B73C","AA356EEA70DEAF88D0D6328C","A1E318035A5E07D0618D598D","C0ED7D68720BD64C572CA835","16B6B6EBAFE62C14AE028A33","5B58D66268436358BED2A5ED","72EBD132783FF2C6A36D18C4","A423304B124D22963FE41082","D95E71A58B0B41E69CC996C8","9EEFA85BF56D76783C46942D","34B7CCFCB594A8336AE657B6","D9617B06CA4BB1FBE9CA8B57","CB86E7ABE6D5F8DECC8A7490","106C92BC3544A15B0B095C69","677CB7A782311C6C86E965CF","FBDC4F23F93125BBEEAE800C","E1B66578E34D4B3C32919BA9");
+"sourceTree" = "<group>";
+};
+"BCE16DD0260827ECF338C787" = {
+"isa" = "PBXSourcesBuildPhase";
+"buildActionMask" = "2147483647";
+"files" = ("746601C89054B677BDDEFD02","47C2BE21283E87890B9A7E7C","296703179176CA38BD9317A0","4F24676B5397CA7C5B1338F2","A2393E7B503CAD65B3A2D177","C441F9052B56C0BA41E95573","FBB3C77C9C2EBD6477D1C75D","684D48C65961E63721D638E2","7B9FC97F833CE1BFE7E252EC","FA0A34BF6E5C165AA6DCD223","89D4BDA3E8BF71C3048B00E5","BAC487E72C471AE7C5A356AE");
+"runOnlyForDeploymentPostprocessing" = "0";
+};
+"0189424A5A60FED329FA868E" = {
+"isa" = "PBXResourcesBuildPhase";
+"buildActionMask" = "2147483647";
+"files" = ("CF8A4D27E1C506A7C75A76BE");
+"runOnlyForDeploymentPostprocessing" = "0";
+};
+"7561BFB015D8F536760CB671" = {
+"isa" = "PBXFrameworksBuildPhase";
+"buildActionMask" = "2147483647";
+"files" = ();
+"runOnlyForDeploymentPostprocessing" = "0";
+};
+"89E1FD6268CC0F221A2BE178" = {
+"isa" = "XCBuildConfiguration";
+"name" = "Debug";
+"buildSettings" = {
+"SDKROOT" = "iphoneos";
+"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+"SWIFT_VERSION" = "5.0";
+"CLANG_ENABLE_MODULES" = "YES";
+"SWIFT_STRICT_CONCURRENCY" = "targeted";
+"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+};
+};
+"7082CC0B6FC1282FCEABD07A" = {
+"isa" = "XCBuildConfiguration";
+"name" = "Debug";
+"buildSettings" = {
+"PRODUCT_BUNDLE_IDENTIFIER" = "com.lianyun.vibeword";
+"PRODUCT_NAME" = "$(TARGET_NAME)";
+"TARGETED_DEVICE_FAMILY" = "1,2";
+"CODE_SIGN_STYLE" = "Automatic";
+"CODE_SIGN_ENTITLEMENTS" = "VibeWord/VibeWord.entitlements";
+"INFOPLIST_FILE" = "VibeWord/Info.plist";
+"GENERATE_INFOPLIST_FILE" = "NO";
+"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+"CURRENT_PROJECT_VERSION" = "1";
+"MARKETING_VERSION" = "1.0";
+"CLOUDKIT_CONTAINER" = "iCloud.com.lianyun.vibeword";
+"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+"APS_ENVIRONMENT" = "development";
+};
+};
+"E6DE6C99132752C914FEF632" = {
+"isa" = "XCBuildConfiguration";
+"name" = "Release";
+"buildSettings" = {
+"SDKROOT" = "iphoneos";
+"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+"SWIFT_VERSION" = "5.0";
+"CLANG_ENABLE_MODULES" = "YES";
+"SWIFT_STRICT_CONCURRENCY" = "targeted";
+"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "";
+};
+};
+"639A7CA24D39909E713B47F7" = {
+"isa" = "XCBuildConfiguration";
+"name" = "Release";
+"buildSettings" = {
+"PRODUCT_BUNDLE_IDENTIFIER" = "com.lianyun.vibeword";
+"PRODUCT_NAME" = "$(TARGET_NAME)";
+"TARGETED_DEVICE_FAMILY" = "1,2";
+"CODE_SIGN_STYLE" = "Automatic";
+"CODE_SIGN_ENTITLEMENTS" = "VibeWord/VibeWord.entitlements";
+"INFOPLIST_FILE" = "VibeWord/Info.plist";
+"GENERATE_INFOPLIST_FILE" = "NO";
+"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+"CURRENT_PROJECT_VERSION" = "1";
+"MARKETING_VERSION" = "1.0";
+"CLOUDKIT_CONTAINER" = "iCloud.com.lianyun.vibeword";
+"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+"APS_ENVIRONMENT" = "production";
+};
+};
+"793D6D7C60BD6329D6F91FDB" = {
+"isa" = "XCConfigurationList";
+"buildConfigurations" = ("89E1FD6268CC0F221A2BE178","E6DE6C99132752C914FEF632");
+"defaultConfigurationIsVisible" = "0";
+"defaultConfigurationName" = "Release";
+};
+"D61E3363DEF3F4E448C68105" = {
+"isa" = "XCConfigurationList";
+"buildConfigurations" = ("7082CC0B6FC1282FCEABD07A","639A7CA24D39909E713B47F7");
+"defaultConfigurationIsVisible" = "0";
+"defaultConfigurationName" = "Release";
+};
+"0E8A3AD980EC179856012B7E" = {
+"isa" = "PBXNativeTarget";
+"buildConfigurationList" = "D61E3363DEF3F4E448C68105";
+"buildPhases" = ("BCE16DD0260827ECF338C787","0189424A5A60FED329FA868E","7561BFB015D8F536760CB671");
+"buildRules" = ();
+"dependencies" = ();
+"name" = "VibeWord";
+"productName" = "VibeWord";
+"productReference" = "38A007151ABE87CC01A5B6E9";
+"productType" = "com.apple.product-type.application";
+};
+"E1B66578E34D4B3C32919BA9" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "UITests/VibeWordUITests.swift";
+"sourceTree" = "<group>";
+};
+"8F69D2603037B23E80BB9FA3" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "E1B66578E34D4B3C32919BA9";
+};
+"9D3AD977850B7EAC0E4F6585" = {
+"isa" = "PBXFileReference";
+"explicitFileType" = "wrapper.cfbundle";
+"path" = "VibeWordUITests.xctest";
+"sourceTree" = "BUILT_PRODUCTS_DIR";
+};
+"95FC400A54C228DD62344224" = {
+"isa" = "PBXSourcesBuildPhase";
+"buildActionMask" = "2147483647";
+"files" = ("8F69D2603037B23E80BB9FA3");
+"runOnlyForDeploymentPostprocessing" = "0";
+};
+"59CE1A55E3C0DC7EDB1A684D" = {
+"isa" = "XCBuildConfiguration";
+"name" = "Debug";
+"buildSettings" = {
+"PRODUCT_BUNDLE_IDENTIFIER" = "com.lianyun.vibeword.uitests";
+"PRODUCT_NAME" = "$(TARGET_NAME)";
+"GENERATE_INFOPLIST_FILE" = "YES";
+"TEST_TARGET_NAME" = "VibeWord";
+"TARGETED_DEVICE_FAMILY" = "1,2";
+"CODE_SIGN_STYLE" = "Automatic";
+};
+};
+"003254340176A76C2BC8F6D4" = {
+"isa" = "XCBuildConfiguration";
+"name" = "Release";
+"buildSettings" = {
+"PRODUCT_BUNDLE_IDENTIFIER" = "com.lianyun.vibeword.uitests";
+"PRODUCT_NAME" = "$(TARGET_NAME)";
+"GENERATE_INFOPLIST_FILE" = "YES";
+"TEST_TARGET_NAME" = "VibeWord";
+"TARGETED_DEVICE_FAMILY" = "1,2";
+"CODE_SIGN_STYLE" = "Automatic";
+};
+};
+"24A9817702DACA7B798D84ED" = {
+"isa" = "PBXTargetDependency";
+"target" = "0E8A3AD980EC179856012B7E";
+};
+"AA87153CE8A1AC8326D1F803" = {
+"isa" = "XCConfigurationList";
+"buildConfigurations" = ("59CE1A55E3C0DC7EDB1A684D","003254340176A76C2BC8F6D4");
+"defaultConfigurationIsVisible" = "0";
+"defaultConfigurationName" = "Release";
+};
+"D24B997AF00C71C20D86BE4D" = {
+"isa" = "PBXNativeTarget";
+"buildConfigurationList" = "AA87153CE8A1AC8326D1F803";
+"buildPhases" = ("95FC400A54C228DD62344224");
+"buildRules" = ();
+"dependencies" = ("24A9817702DACA7B798D84ED");
+"name" = "VibeWordUITests";
+"productName" = "VibeWordUITests";
+"productReference" = "9D3AD977850B7EAC0E4F6585";
+"productType" = "com.apple.product-type.bundle.ui-testing";
+};
+"98F54143AB4E86B28C3AFEE0" = {
+"isa" = "PBXProject";
+"attributes" = {
+"LastUpgradeCheck" = "1600";
+"TargetAttributes" = {
+"0E8A3AD980EC179856012B7E" = {
+"CreatedOnToolsVersion" = "16.0";
+"SystemCapabilities" = {
+"com.apple.iCloud" = {
+"enabled" = "1";
+};
+"com.apple.Push" = {
+"enabled" = "1";
+};
+"com.apple.BackgroundModes" = {
+"enabled" = "1";
+};
+};
+};
+};
+};
+"buildConfigurationList" = "793D6D7C60BD6329D6F91FDB";
+"compatibilityVersion" = "Xcode 14.0";
+"developmentRegion" = "zh_CN";
+"hasScannedForEncodings" = "0";
+"knownRegions" = ("en","zh_CN","Base");
+"mainGroup" = "64292B1C2B2E13EAD8788FC8";
+"productRefGroup" = "FBDC4F23F93125BBEEAE800C";
+"projectDirPath" = "";
+"projectRoot" = "";
+"targets" = ("0E8A3AD980EC179856012B7E","D24B997AF00C71C20D86BE4D");
+};
+};
+"rootObject" = "98F54143AB4E86B28C3AFEE0";
+}

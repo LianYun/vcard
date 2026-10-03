@@ -31,6 +31,7 @@ class GenerationQueue {
   private tasks: GenerationTask[] = []
   private listeners = new Set<Listener>()
   private completionListeners = new Set<CompletionListener>()
+  private configs = new Map<string, LLMConfig>()
   private aborts = new Map<string, AbortController>()
 
   // Reference-stable snapshot for useSyncExternalStore.
@@ -62,15 +63,16 @@ class GenerationQueue {
       status: 'queued',
       enqueuedAt: Date.now(),
     }
+    this.configs.set(task.id, { ...llmConfig })
     this.tasks.push(task)
     this.notify()
-    this.kick(llmConfig)
+    this.kick()
     return task
   }
 
   cancel = (id: string): void => {
     const task = this.tasks.find((t) => t.id === id)
-    if (!task) return
+    if (!task || (task.status !== 'queued' && task.status !== 'running')) return
     const ac = this.aborts.get(id)
     if (ac) ac.abort()
     if (task.status === 'queued' || task.status === 'running') {
@@ -78,19 +80,20 @@ class GenerationQueue {
       task.error = '已取消'
       task.finishedAt = Date.now()
     }
-    this.aborts.delete(id)
+    this.configs.delete(id)
     this.notify()
+    this.kick()
   }
 
   private runningCount(): number {
-    return this.tasks.filter((t) => t.status === 'running').length
+    return this.aborts.size
   }
 
-  private kick(llmConfig: LLMConfig): void {
+  private kick(): void {
     while (this.runningCount() < MAX_CONCURRENCY) {
       const next = this.tasks.find((t) => t.status === 'queued')
       if (!next) return
-      this.run(next, llmConfig)
+      this.run(next, this.configs.get(next.id)!)
     }
   }
 
@@ -106,6 +109,7 @@ class GenerationQueue {
       // (no stale reference held in the queue).
       const imageConfig = await loadImageGenConfig()
       const result = await generateCardsWithImage(task.word, llmConfig, imageConfig, ac.signal)
+      ac.signal.throwIfAborted()
       const card1 = await addCard(result.enToCn.front, result.enToCn.back, result.enToCn.example)
       const card2 = await addCard(result.cnToEn.front, result.cnToEn.back, result.cnToEn.example)
 
@@ -128,8 +132,9 @@ class GenerationQueue {
       }
     } finally {
       this.aborts.delete(task.id)
+      this.configs.delete(task.id)
       this.notify()
-      this.kick(llmConfig)
+      this.kick()
     }
   }
 

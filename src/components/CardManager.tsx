@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { deleteCard, updateCard, allCards } from '../lib/cardStore'
 import { cardsToObsidianMd, downloadMarkdown } from '../lib/export'
 import { createLogger } from '../lib/log'
-import { deleteOneProgress } from '../lib/storage'
+import { addDays, todayKey } from '../lib/date'
 import type { Card } from '../types'
 import { ActivityHeatmap } from './ActivityHeatmap'
 import { Markdown } from './Markdown'
@@ -23,21 +23,14 @@ interface Group {
   cards: Card[]
 }
 
-// Bucket boundaries (in seconds since epoch) computed from local midnight.
-function startOfTodaySec(): number {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return Math.floor(d.getTime() / 1000)
-}
-
 function groupCardsByDate(cards: Card[]): Group[] {
   // Newest first.
   const sorted = [...cards].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
 
-  const today = startOfTodaySec()
-  const yesterday = today - 86_400
-  const weekAgo = today - 7 * 86_400
-  const monthAgo = today - 30 * 86_400
+  const today = todayKey()
+  const yesterday = addDays(today, -1)
+  const weekAgo = addDays(today, -7)
+  const monthAgo = addDays(today, -30)
 
   const groups: Record<string, Card[]> = {
     今天: [],
@@ -49,11 +42,11 @@ function groupCardsByDate(cards: Card[]): Group[] {
   }
 
   for (const c of sorted) {
-    const t = c.createdAt
-    if (t == null) {
+    if (c.createdAt == null) {
       groups['未知'].push(c)
       continue
     }
+    const t = todayKey(new Date(c.createdAt * 1000))
     if (t >= today) groups['今天'].push(c)
     else if (t >= yesterday) groups['昨天'].push(c)
     else if (t >= weekAgo) groups['本周'].push(c)
@@ -180,7 +173,6 @@ export function CardManager({ refreshKey, onChanged, highlightCardId, onHighligh
   async function handleDelete(card: Card) {
     if (!confirm(`确定删除「${card.front}」？相关学习进度也会被清除。`)) return
     await deleteCard(card.id)
-    await deleteOneProgress(card.id)
     await refresh()
     onChanged?.()
   }
