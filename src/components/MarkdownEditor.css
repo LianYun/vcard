@@ -1,0 +1,62 @@
+.document-editor { position:relative; min-width:0; width:100%; border:1px solid var(--ui-line); border-radius:12px; background:var(--ui-surface); color:var(--ui-text); transition:border-color .18s,box-shadow .18s; }
+.document-editor:focus-within { border-color:rgb(var(--slate-300)); box-shadow:0 2px 12px #00000004; }
+.document-editor-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px 0; }
+.document-editor-caption { font-size:11px; letter-spacing:.04em; color:var(--ui-muted); opacity:.7; }
+.document-modes { display:flex; gap:2px; background:var(--ui-soft); border-radius:7px; padding:3px; }
+.document-modes button { border-radius:5px; padding:3px 10px; font-size:11px; color:var(--ui-muted); transition:background .15s; }
+.document-modes button[aria-pressed=true] { background:var(--ui-surface); color:var(--ui-text); box-shadow:0 1px 3px #0000000c; }
+.document-editor button:focus-visible, .document-command-search:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
+.document-editor-inner { position:relative; }
+.document-insert-row { display:flex; justify-content:space-between; align-items:center; padding:6px 20px 0; gap:8px; }
+.document-insert { display:flex; align-items:center; gap:4px; padding:4px 5px; border-radius:5px; color:var(--ui-muted); font-size:11px; }
+.document-insert span { font-size:18px; line-height:18px; }
+.document-insert:hover, .document-insert[aria-expanded=true] { background:var(--ui-soft); color:var(--ui-text); }
+.document-shortcut { font-size:10px; color:var(--ui-muted); opacity:0; transition:opacity .15s; }
+.document-editor:focus-within .document-shortcut { opacity:.7; }
+.document-writing { position:relative; padding:12px 26px 24px; font-size:15px; line-height:1.8; overflow-wrap:anywhere; }
+.document-writing .editor { min-height:115px; outline:none; }
+.document-writing .editor > :first-child { margin-top:0; }
+.document-writing .editor > :last-child { margin-bottom:0; }
+.document-writing.is-empty::before { content:attr(data-placeholder); position:absolute; top:12px; left:26px; color:var(--ui-muted); opacity:.55; pointer-events:none; font-size:14px; }
+.document-writing table { width:100%; table-layout:fixed; }
+.document-writing td, .document-writing th { border:1px solid var(--ui-line); padding:6px 10px; }
+.document-writing th { background:var(--ui-soft); }
+.document-writing blockquote { border-left:3px solid var(--ui-line); padding-left:16px; font-style:normal; }
+.document-writing pre { max-width:100%; overflow-x:auto; border-radius:8px; }
+.document-source { display:block; width:100%; min-height:195px; background:transparent; color:inherit; padding:20px 26px; border:0; outline:none; resize:vertical; font:13px/1.8 ui-monospace,SFMono-Regular,monospace; }
+.document-preview { min-height:195px; padding:20px 26px; overflow-x:auto; }
+.document-command-menu { position:absolute; z-index:40; top:36px; left:20px; width:min(300px,calc(100% - 40px)); padding:6px; border:1px solid var(--ui-line); border-radius:12px; background:var(--ui-surface); box-shadow:0 8px 30px #00000018,0 2px 6px #00000008; }
+.document-command-search { width:100%; background:transparent; color:var(--ui-text); padding:9px 10px; margin-bottom:4px; border:0; border-bottom:1px solid var(--ui-line); outline:none; font-size:13px; }
+.document-command-items { max-height:245px; overflow-y:auto; }
+.document-command-items button { display:flex; align-items:center; gap:10px; padding:7px 9px; width:100%; border-radius:6px; text-align:left; font-size:13px; }
+.document-command-items button:hover,.document-command-items button.is-active { background:var(--ui-soft); }
+.document-command-icon { display:grid; place-items:center; width:28px; height:28px; border:1px solid var(--ui-line); border-radius:5px; font-size:15px; font-family:ui-serif,Georgia,serif; }
+.document-command-items p { padding:16px; font-size:13px; color:var(--ui-muted); }
+.document-command-hint { border-top:1px solid var(--ui-line); margin-top:5px; padding:8px 8px 3px; color:var(--ui-muted); font-size:10px; }
+.document-selection { position:absolute; z-index:30; display:flex; gap:2px; padding:4px; background:var(--ui-surface); border:1px solid var(--ui-line); box-shadow:0 4px 16px #00000018; border-radius:8px; }
+.document-selection button { width:36px; height:30px; border-radius:4px; font-family:Georgia,serif; font-weight:700; }
+.document-selection button:nth-child(2) { font-style:italic; }
+.document-selection button:nth-child(3) { text-decoration:line-through; }
+.document-selection button:hover { background:var(--ui-soft); }
+@media(max-width:480px) { .document-editor-header { padding:10px 12px 0; } .document-insert-row { padding-left:10px; padding-right:12px; } .document-writing,.document-preview,.document-source { padding-left:16px; padding-right:16px; } .document-writing.is-empty::before { left:16px; font-size:12px; } .document-shortcut { display:none; } }
+.document-writing blockquote { font-weight:400; }
+.document-writing blockquote p::before,.document-writing blockquote p::after { content:none; }
+
+/* Bound every intrinsic sizing layer, including raw HTML, data URLs and tables. */
+.document-editor, .document-editor-inner, .document-writing, .document-writing .milkdown, .document-writing .editor, .document-source { min-width: 0; max-width: 100%; }
+.document-writing { overflow-x: auto; }
+.document-writing .editor { overflow-wrap: anywhere; word-break: break-word; }
+.document-writing .editor > * { min-width: 0; max-width: 100%; }
+.document-writing span[data-type="html"] { white-space: pre-wrap; overflow-wrap: anywhere; }
+.document-source { white-space: pre-wrap; overflow-wrap: anywhere; }
+.card-editor-fields .document-writing { min-height: 225px; max-height: 440px; overflow: auto; }
+.card-editor-fields .document-source { min-height: 270px; max-height: 440px; }
+.editor-audio { display: inline-flex; flex-direction: column; width: 100%; max-width: 100%; min-width: 0; padding: 12px; margin: 12px 0; border: 1px solid var(--ui-line); background: var(--ui-soft); border-radius: 10px; white-space: normal; vertical-align: middle; }
+.editor-audio-title { font: 600 12px/1.5 -apple-system,BlinkMacSystemFont,sans-serif; color: var(--ui-text); margin-bottom: 10px; }
+.editor-audio .inline-audio { width: 100%; max-width: 100%; margin: 0; border: 0; padding: 0; }
+.editor-audio-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.prose .editor-audio-actions button { font: 11px/1.5 -apple-system,BlinkMacSystemFont,sans-serif; padding: 2px 0; min-height: 24px; border: 0; background: transparent; color: var(--ui-muted); }
+.editor-audio-actions button:hover { color: var(--ui-accent); }
+.editor-audio-status { font-size: 11px; color: var(--ui-muted); margin-top: 6px; }
+.editor-audio-status:empty { display: none; }
+.editor-audio.ProseMirror-selectednode { outline: 2px solid var(--ui-accent); }

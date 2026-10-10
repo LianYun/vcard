@@ -31,7 +31,9 @@ final class CoreTests: XCTestCase {
     }
     func testScheduleBudgetAndSeededCards() {
         let cards = (0..<8).map { Card(id: "\($0)", front: "\($0)", back: "") }
-        let progress = ["0": SchedulingState(cardId: "0", due: "2026-09-30"), "1": SchedulingState(cardId: "1", due: "2026-10-01")]
+        var progress = ["0": SchedulingState(cardId: "0", due: "2026-09-30"), "1": SchedulingState(cardId: "1", due: "2026-10-01")]
+        progress["0"]?.issuedAt = "2026-09-30"
+        progress["1"]?.issuedAt = "2026-09-30"
         let result = Schedule.make(cards: cards, progress: progress, limit: 3, issued: 1, today: "2026-09-30")
         XCTAssertEqual(result.due.map(\.id), ["0"])
         XCTAssertEqual(result.fresh.count, 2)

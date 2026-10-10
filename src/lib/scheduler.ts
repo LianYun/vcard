@@ -13,7 +13,7 @@
 import type { Card, ProgressMap, Settings, SchedulingState } from '../types'
 import type { Meta } from './storage'
 import { todayKey } from './date'
-import { initialState } from './sm2'
+import { initialState, isNew, isDue } from './sm2'
 
 export interface ScheduleResult {
   /** Due review cards, in randomized order. */
@@ -24,9 +24,9 @@ export interface ScheduleResult {
   meta: Meta
 }
 
-/** Whether a card has never been introduced (no progress entry at all). */
+/** Empty seeded progress remains new until explicitly issued or reviewed. */
 function isFresh(state: SchedulingState | undefined): boolean {
-  return !state
+  return isNew(state)
 }
 
 /** In-place Fisher-Yates shuffle. Returns the same array for chaining. */
@@ -70,7 +70,7 @@ export function schedule(
       continue
     }
     // Seen before: due if its scheduled date is today or earlier.
-    if (state!.due <= today) {
+    if (isDue(state)) {
       dueReviews.push(card)
     }
   }

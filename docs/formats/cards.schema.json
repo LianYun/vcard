@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Vibe Word cards v1",
+  "type": "object",
+  "required": [
+    "format",
+    "version",
+    "cards"
+  ],
+  "properties": {
+    "format": {
+      "const": "vibe-word.cards"
+    },
+    "version": {
+      "const": 1
+    },
+    "cards": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "front",
+          "back"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "front": {
+            "type": "string",
+            "minLength": 1
+          },
+          "back": {
+            "type": "string"
+          },
+          "example": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "noteId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 512
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,9 +1,13 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { CardEditorProvider } from './components/CardEditor'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { createLogger } from './lib/log'
 import './index.css'
+import './theme.css'
+import './mac.css'
+import './lib/theme'
 
 const log = createLogger('main')
 
@@ -29,7 +33,7 @@ try {
   createRoot(rootEl).render(
     <StrictMode>
       <ErrorBoundary>
-        <App />
+        <CardEditorProvider><App /></CardEditorProvider>
       </ErrorBoundary>
     </StrictMode>,
   )

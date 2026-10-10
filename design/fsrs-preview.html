@@ -1,0 +1,29 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>FSRS 本地演示</title><body><p id="status">正在准备独立演示数据…</p><script type="module">
+import {fsrsPreview,DEFAULT_SCHEDULER} from '/src/lib/fsrs.ts';
+import {initialState} from '/src/lib/sm2.ts';
+import {todayKey,addDays} from '/src/lib/date.ts';
+// Development-only fixture, never bundled into the production application.
+// Only populate an empty localhost origin. Never replace an existing library.
+if(!JSON.parse(localStorage.getItem('vibe-word:cards:v1')||'[]').length){
+ const now=Date.now(),words=['serendipity','resilience','meticulous','lucid','gratitude','eloquent','curiosity','tranquility','plausible','mitigate','counterpart','ambiguous','enduring','versatile','coherent','deliberate','insight','persevere','subtle','vivid'];
+ const cards=words.map((word,n)=>({id:`fsrs-demo:${n}`,front:word,back:'FSRS 演示卡片\n\n用于查看评分间隔、设置与个人优化效果。',tags:['FSRS 演示'],createdAt:now/1000}));
+ const progress={},reviews=[];
+ for(let n=0;n<cards.length;n++){
+  let state=initialState(cards[n].id,addDays(todayKey(),-80));
+  for(let i=0;i<24;i++){
+   const timestamp=now-(80-i*3)*86400000+n*1000;
+   const quality=(i+n)%4===0?1:(i+n)%5===0?3:(i+n)%7===0?5:4;
+   const after=fsrsPreview(state,DEFAULT_SCHEDULER,timestamp)[quality];
+   reviews.push({id:`demo-${i}-${n}`,cardId:state.cardId,before:state,after,quality,timestamp,day:todayKey(new Date(timestamp)),algorithm:'fsrs-6-anki-v1'});
+   state=after;
+  }
+  progress[state.cardId]={...state,phase:'review',learningDue:null,due:addDays(todayKey(),n%9-1)};
+ }
+ // The reported 39-day legacy example is one of today's review cards.
+ progress[cards[0].id]={cardId:cards[0].id,ease:2.6,interval:15,repetitions:3,due:todayKey(),lastReviewedAt:now-15*86400000,phase:'review'};
+ localStorage.setItem('vibe-word:cards:v1',JSON.stringify(cards));
+ localStorage.setItem('vibe-word:study:v3',JSON.stringify({progress,reviews:reviews.filter(r=>r.cardId!==cards[0].id),controls:{},issued:{}}));
+ localStorage.setItem('vibe-word:language:v1',JSON.stringify('zh-Hans'));
+}
+location.replace('/');
+</script></body></html>

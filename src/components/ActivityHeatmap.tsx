@@ -1,3 +1,4 @@
+import { t } from '../lib/i18n'
 // GitHub-style contribution heatmap. Shows the last ~26 weeks of activity
 // (reviewed + added per day). Pure SVG, no external dependencies.
 
@@ -10,12 +11,12 @@ import type { DailyStat } from '../lib/storage'
 const log = createLogger('heatmap')
 
 const WEEKS = 26  // ~half a year
-const CELL = 12
-const GAP = 3
+const CELL = 16
+const GAP = 4
 const DAYS_PER_WEEK = 7
 
 function colorFor(total: number): string {
-  if (total === 0) return '#ebedf0'
+  if (total === 0) return 'var(--ui-line)'
   if (total <= 2) return '#9be9a8'
   if (total <= 5) return '#40c463'
   if (total <= 9) return '#30a14e'
@@ -104,23 +105,23 @@ export function ActivityHeatmap({ refreshKey = 0 }: Props) {
     return { activeDays, totalReviewed, totalAdded, streak }
   }, [statsByDate, today])
 
-  const width = WEEKS * (CELL + GAP)
-  const height = DAYS_PER_WEEK * (CELL + GAP)
+  const width = WEEKS * (CELL + GAP) - GAP
+  const height = DAYS_PER_WEEK * (CELL + GAP) - GAP
 
   return (
     <div className="app-surface p-4">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-sm font-semibold text-slate-800">学习记录</h3>
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
-          <span>连续 <span className="font-semibold text-orange-600">{totals.streak}</span> 天</span>
-          <span>累计 <span className="font-semibold text-slate-700">{totals.activeDays}</span> 天</span>
-          <span>复习 <span className="font-semibold text-slate-700">{totals.totalReviewed}</span></span>
-          <span>新增 <span className="font-semibold text-slate-700">{totals.totalAdded}</span></span>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="shrink-0 text-sm font-semibold text-slate-800">{t("学习记录")}</h3>
+        <div className="flex min-w-0 items-center gap-3 overflow-x-auto whitespace-nowrap text-xs text-slate-500">
+          <span>{t("连续 {0} 天", totals.streak)}</span>
+          <span>{t("累计 {0} 天", totals.activeDays)}</span>
+          <span>{t("复习 {0}", totals.totalReviewed)}</span>
+          <span>{t("新增 {0}", totals.totalAdded)}</span>
         </div>
       </div>
 
-      <div className="relative overflow-x-auto">
-        <svg width={width} height={height} className="block">
+      <div className="relative">
+        <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} className="block h-auto max-w-full overflow-visible">
           {cells.map((col, w) =>
             col.map((cell, d) => {
               const x = w * (CELL + GAP)
@@ -135,14 +136,14 @@ export function ActivityHeatmap({ refreshKey = 0 }: Props) {
                   height={CELL}
                   rx={2}
                   fill={fill}
-                  stroke={cell.inFuture ? '#f1f5f9' : 'none'}
+                  stroke={cell.inFuture ? 'var(--ui-line)' : 'none'}
                   strokeWidth={cell.inFuture ? 1 : 0}
                   onMouseEnter={(e) => {
                     if (cell.inFuture) return
-                    const rect = (e.currentTarget.ownerSVGElement as SVGElement).getBoundingClientRect()
+                    const rect = e.currentTarget.getBoundingClientRect()
                     setTooltip({
-                      x: rect.left + x + CELL / 2,
-                      y: rect.top + y,
+                      x: rect.left + rect.width / 2,
+                      y: rect.top,
                       cell,
                     })
                   }}
@@ -160,13 +161,13 @@ export function ActivityHeatmap({ refreshKey = 0 }: Props) {
             style={{ left: tooltip.x, top: tooltip.y - 6 }}
           >
             <div className="font-medium">{formatDate(tooltip.cell.date)}</div>
-            <div>复习 {tooltip.cell.reviewed}　新增 {tooltip.cell.added}</div>
+            <div>{t("复习 {0}　新增 {1}", tooltip.cell.reviewed, tooltip.cell.added)}</div>
           </div>
         )}
       </div>
 
       <div className="mt-2 flex items-center justify-end gap-1 text-xs text-slate-400">
-        <span>少</span>
+        <span>{t("少")}</span>
         {[0, 2, 5, 9, 10].map((n) => (
           <span
             key={n}
@@ -174,7 +175,7 @@ export function ActivityHeatmap({ refreshKey = 0 }: Props) {
             style={{ backgroundColor: colorFor(n) }}
           />
         ))}
-        <span>多</span>
+        <span>{t("多")}</span>
       </div>
     </div>
   )

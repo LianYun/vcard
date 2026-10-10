@@ -1,10 +1,13 @@
 # Vibe Word
 
-一个用 React + TypeScript 实现的轻量级背单词应用，采用 SuperMemo-2 间隔重复算法。所有数据保存在浏览器本地（localStorage），无需后端、无需登录。
+一个用 React + TypeScript 实现的轻量级背单词应用，采用 SuperMemo-2 间隔重复算法。浏览器使用 localStorage；Mac 和 iPhone 使用开放 JSON 文件，并可通过用户选择的 iCloud Drive 文件夹同步。无需自建后端。
+
+开放导入格式与用法见 [JSON 导入和文件同步](docs/FILE-SYNC.md)，可直接下载 [卡片示例](docs/formats/cards.example.json)。
 
 ## 功能
 
 - **间隔重复复习**：基于 SuperMemo-2 算法，自动安排每张卡片的下次复习时间。
+- **AI 任务队列**：后台生成，逐张阅读／编辑后确认入库，重新生成确认后才替换；详见 [任务队列](docs/AI-TASK-QUEUE.md)。
 - **自建卡片**：随时添加自己的单词卡（正面/背面/例句），可编辑、删除。
 - **每日新词预算**：在设置中控制每天自动引入多少张新卡。
 - **纯本地存储**：自建卡片与学习进度都存在本地，刷新或关闭后仍在。

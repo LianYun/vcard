@@ -5,7 +5,7 @@
   "identifier": "com.vibeword.app",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:5175",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
   },
@@ -13,9 +13,13 @@
     "windows": [
       {
         "title": "Vibe Word · 背单词",
+        "hiddenTitle": true,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": { "x": 26, "y": 26 },
         "width": 800,
         "height": 700,
         "resizable": true,
+        "dragDropEnabled": false,
         "fullscreen": false
       }
     ],

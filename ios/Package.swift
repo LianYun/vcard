@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "VibeWordCore",
-    platforms: [.macOS(.v13), .iOS(.v17)],
+    platforms: [.macOS(.v13), .iOS(.v17), .watchOS(.v10)],
     products: [.library(name: "VibeWordCore", targets: ["VibeWordCore"])],
     targets: [
         .target(name: "VibeWordCore", path: "VibeWord/Core"),

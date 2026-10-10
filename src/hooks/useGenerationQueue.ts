@@ -11,5 +11,6 @@ export function useGenerationQueue() {
     tasks,
     enqueue: generationQueue.enqueue,
     cancel: generationQueue.cancel,
+    resume: generationQueue.resume,
   }
 }

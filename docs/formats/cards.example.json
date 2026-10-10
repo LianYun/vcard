@@ -1,0 +1,17 @@
+{
+  "format": "vibe-word.cards",
+  "version": 1,
+  "cards": [
+    {
+      "id": "my-vocabulary:serendipity",
+      "front": "serendipity",
+      "back": "意外发现美好事物的能力。\n\n**词性**：名词",
+      "example": "Finding this cafe was pure serendipity."
+    },
+    {
+      "id": "my-vocabulary:resilient",
+      "front": "resilient",
+      "back": "有韧性的；能迅速恢复的"
+    }
+  ]
+}

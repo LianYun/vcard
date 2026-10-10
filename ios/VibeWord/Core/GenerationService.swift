@@ -92,7 +92,40 @@ public struct GenerationService: Sendable {
             }
         }
         try Task.checkCancellation()
-        return [Card(front: word, back: back),
+        var result = [Card(front: word, back: back),
                 Card(front: "\(r.chineseHint)\n（提示：\(r.roots)）", back: word, example: r.example)]
+        let noteId = UUID().uuidString
+        for index in result.indices { result[index].noteId = noteId }
+        return result
+    }
+}
+
+extension RegeneratedCard {
+    public static func parse(_ content: String) throws -> Self {
+        guard var draft = try? JSONDecoder().decode(Self.self, from: GenerationService.extractJSON(content)) else {
+            throw GenerationService.Failure("无法解析模型返回的 JSON，请重试")
+        }
+        draft.front = draft.front.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft.back = draft.back.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft.example = draft.example.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !draft.front.isEmpty, !draft.back.isEmpty else { throw GenerationService.Failure("无法解析模型返回的 JSON，请重试") }
+        return draft
+    }
+}
+
+extension GenerationService {
+    public func regenerate(card: Card, requirements: String, config: APIConfig) async throws -> RegeneratedCard {
+        guard card.anki == nil else { throw Failure("Anki 模板卡暂不支持重新生成，请使用编辑 Anki 笔记") }
+        guard config.isConfigured else { throw Failure("请先在设置中配置 AI 模型") }
+        let system = """
+        你是学习卡片编辑助手。根据原卡片和用户要求重新编写当前这一张卡片。
+        保留原学习主题、语言和问答方向，不生成关联卡片。要求为空时优化清晰度和例句。
+        正反面使用 Markdown。保留原有图片、音频及附件引用，不编造附件地址。example 是更新后的例句，无例句时返回空字符串。
+        只返回 JSON：{"front":"非空正面","back":"非空背面","example":"例句或空字符串"}。
+        """
+        let payload = try JSONSerialization.data(withJSONObject: ["front": card.front, "back": card.back, "example": card.example ?? "", "requirements": requirements.trimmingCharacters(in: .whitespacesAndNewlines)])
+        let content = try await chat(config, system: system, user: String(decoding: payload, as: UTF8.self), temperature: 0.3)
+        try Task.checkCancellation()
+        return try RegeneratedCard.parse(content)
     }
 }

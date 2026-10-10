@@ -91,3 +91,29 @@ export function initialState(cardId: string, seedDue: string = todayKey()): Sche
     lastReviewedAt: null,
   }
 }
+
+/** Durable learning steps; legacy SM-2 remains the long-term review algorithm. */
+export function reviewGrade(prev: SchedulingState, quality: Quality, now = Date.now()): SchedulingState {
+  const day = todayKey(new Date(now))
+  const learning = prev.phase === 'new' || prev.phase === 'learning' || prev.phase === 'relearning' || prev.lastReviewedAt == null
+  if (quality < 3 || (learning && quality !== 5)) {
+    if (quality >= 4 && (prev.learningStep ?? 0) >= 1) {
+      return { ...grade(prev, quality, day), phase: 'review', learningDue: null, learningStep: 0, lastReviewedAt: now }
+    }
+    const minutes = quality < 3 ? 1 : quality === 3 ? 6 : 10
+    return { ...(quality < 3 && !learning ? grade(prev, quality, day) : prev), phase: prev.phase === 'relearning' || !learning ? 'relearning' : 'learning',
+      learningStep: quality < 3 ? 0 : quality === 3 ? prev.learningStep ?? 0 : 1,
+      learningDue: now + minutes * 60000, due: todayKey(new Date(now + minutes * 60000)), lastReviewedAt: now }
+  }
+  return { ...grade(prev, quality, day), phase: 'review', learningDue: null, learningStep: 0, lastReviewedAt: now }
+}
+export function isNew(state: SchedulingState | undefined): boolean {
+  return !state || (state.lastReviewedAt == null && !state.issuedAt)
+}
+export function isDue(state: SchedulingState | undefined, now = Date.now()): boolean {
+  if (!state || isNew(state)) return false
+  return state.learningDue != null ? state.learningDue <= now : state.due <= todayKey(new Date(now))
+}
+export function intervalLabel(state: SchedulingState, now = Date.now()): string {
+  return state.learningDue != null ? `${Math.max(0.1, Math.round((state.learningDue - now) / 6000) / 10)} 分钟` : `${state.interval} 天`
+}
