@@ -1,11 +1,16 @@
+import { createPortal } from 'react-dom'
 import { localizedMessage, t } from '../lib/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { authorizeCloudSync, loadCloudStatus, type CloudStatus } from '../lib/storage'
 
-export function CloudSyncStatus({ onChange, visible }: { onChange: () => void; visible: boolean }) {
+export function CloudSyncStatus({ onChange, visible, compactTarget }: { onChange: () => void; visible: boolean; compactTarget?: HTMLElement | null }) {
   const [status, setStatus] = useState<CloudStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
+  const [container, setContainer] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    setContainer(visible ? document.getElementById('settings-cloud-status') : null)
+  }, [visible])
   const revision = useRef<number>()
 
   function applyStatus(next: CloudStatus | null) {
@@ -42,8 +47,10 @@ export function CloudSyncStatus({ onChange, visible }: { onChange: () => void; v
     finally { setChecking(false) }
   }
   // Keep observing library revisions on every tab; only show controls in Settings.
-  if (!visible || (!status && !error)) return null
-  return <aside className="app-surface settings-section mt-5" aria-labelledby="cloud-sync-heading">
+  const summary = localizedMessage(error ?? status?.message ?? t('本地存储'))
+  return <>
+    {compactTarget && createPortal(<span className="workspace-sync-summary" title={summary}><span className={`workspace-status-dot${error || status?.needsAuthorization ? ' has-error' : ''}`} aria-hidden="true"/>{summary}</span>, compactTarget)}
+    {visible && container && (status || error) && createPortal(<aside className="app-surface settings-section" aria-labelledby="cloud-sync-heading">
     <div className="settings-heading"><h3 id="cloud-sync-heading" className="section-title">{t('同步状态')}</h3></div>
     <p className={`section-copy break-words${error ? ' text-red-600' : ''}`} role="status" aria-live="polite">{localizedMessage(error ?? status?.message ?? "")}</p>
     <div className="flex flex-wrap gap-3">
@@ -51,5 +58,6 @@ export function CloudSyncStatus({ onChange, visible }: { onChange: () => void; v
         {checking ? t("处理中…") : t(status?.needsAuthorization ? "重新授权同步目录" : "立即同步")}
       </button>
     </div>
-  </aside>
+  </aside>, container)}
+  </>
 }

@@ -1,18 +1,21 @@
+import { AppSelect } from './AppSelect'
+import { DeckPicker } from './DeckEditor'
 import { useEffect, useRef, useState } from 'react'
-import { cancelAnki, ankiModels, pendingAnki, remapAnki, type AnkiModel, ankiPage, commitAnki, discardAnki, inspectAnki, loadDecks, supportsDocumentImport, type AnkiPreview } from '../lib/storage'
-import type { Card, Deck } from '../types'
+import { cancelAnki, ankiModels, pendingAnki, remapAnki, type AnkiModel, ankiPage, commitAnki, discardAnki, inspectAnki, supportsDocumentImport, type AnkiPreview } from '../lib/storage'
+import type { Card } from '../types'
 import { deckPath } from '../lib/decks'
 import { Markdown } from './Markdown'
 import { t } from '../lib/i18n'
-export function AnkiImport({ onChanged }: { onChanged: () => void }) {
+export function AnkiImport({ onChanged, initialDeckId = '' }: { initialDeckId?: string; onChanged: () => void }) {
   const [supported,setSupported]=useState(false),[preview,setPreview]=useState<AnkiPreview|null>(null),[cards,setCards]=useState<Card[]>([])
-  const [decks,setDecks]=useState<Deck[]>([]),[selection,setSelection]=useState<string[]>([]),[parent,setParent]=useState('')
+  const [selection,setSelection]=useState<string[]>([]),[parent,setParent]=useState(initialDeckId)
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState(''),[page,setPage]=useState(0)
   const [pending,setPending]=useState<AnkiPreview[]>([]),[models,setModels]=useState<AnkiModel[]>([]),[mappings,setMappings]=useState<Record<string,{front:string;back:string}>>({})
   useEffect(()=>{void pendingAnki().then(setPending).catch(e=>setError(String(e)))},[])
   useEffect(()=>{if(preview)void ankiModels(preview.stage).then(setModels).catch(e=>setError(String(e)))},[preview?.stage])
   const cancelled=useRef(false),offset=useRef(0),totals=useRef({added:0,skipped:0})
-  useEffect(()=>{void supportsDocumentImport().then(setSupported).catch(e=>setError(String(e)));void loadDecks().then(setDecks).catch(e=>setError(String(e)))},[])
+  useEffect(() => { if (offset.current === 0) setParent(initialDeckId) }, [initialDeckId])
+  useEffect(()=>{void supportsDocumentImport().then(setSupported).catch(e=>setError(String(e)))},[])
   useEffect(()=>{let active=true;if(preview)void ankiPage(preview.stage,page*20).then(c=>{if(active)setCards(c)}).catch(e=>setError(String(e)));return()=>{active=false}},[preview,page])
   async function choose(){setBusy(true);setError('');setStatus(t('正在解析牌组和附件…'));try{const next=await inspectAnki();if(next){setMappings({});setPreview(next);setSelection(next.decks.filter(d=>!d.parentId).map(d=>d.id));setPage(0);offset.current=0;totals.current={added:0,skipped:0}}setStatus('')}catch(e){setError(String(e));setStatus('')}finally{setBusy(false)}}
   async function save(){if(!preview)return;setBusy(true);setError('');cancelled.current=false
@@ -25,13 +28,13 @@ export function AnkiImport({ onChanged }: { onChanged: () => void }) {
     {error&&<p role="alert" className="text-red-600">{error}</p>}{status&&<p role="status">{status}</p>}
     {preview&&<><h3>{preview.name} · {preview.count} {t('张卡片')} · {preview.mediaCount} {t('个附件')}</h3>
       <fieldset disabled={busy||offset.current>0} className="space-y-2"><legend>{t('选择牌组（包含子牌组）')}</legend>{preview.decks.map(d=><label className="block" key={d.id}><input type="checkbox" checked={selection.includes(d.id)} onChange={e=>setSelection(e.target.checked?[...selection,d.id]:selection.filter(id=>id!==d.id))}/> {deckPath(d.id,preview.decks)}</label>)}
-        <label>{t('挂到现有牌组下')}<select className="input" value={parent} onChange={e=>setParent(e.target.value)}><option value="">{t('顶层')}</option>{decks.map(d=><option key={d.id} value={d.id}>{deckPath(d.id,decks)}</option>)}</select></label>
+        <DeckPicker value={parent} onChange={setParent} allowRoot disabled={busy || offset.current > 0}/>
         <p className="text-sm">{t('已导入的来源卡片会跳过，保留本地修改和学习进度。已有来源牌组沿用当前层级。')}</p>
       </fieldset>
       {models.some(m=>!m.cloze)&&<details><summary>{t('自定义字段映射')}</summary><p>{t('仅在模板无法正确转换时使用；同一笔记类型的卡片将使用指定正反面。')}</p>
         {models.filter(m=>!m.cloze).map(model=><fieldset key={model.id} disabled={busy||offset.current>0}><legend>{model.name}</legend>
           <label><input type="checkbox" checked={!!mappings[model.id]} onChange={e=>{const next={...mappings};if(e.target.checked)next[model.id]={front:model.fields[0],back:model.fields[1]??model.fields[0]};else delete next[model.id];setMappings(next)}}/>{t('指定字段')}</label>
-          {mappings[model.id]&&(['front','back'] as const).map(side=><label key={side}>{t(side==='front'?'正面':'背面')}<select className="input" value={mappings[model.id][side]} onChange={e=>setMappings({...mappings,[model.id]:{...mappings[model.id],[side]:e.target.value}})}>{model.fields.map(f=><option key={f}>{f}</option>)}</select></label>)}
+          {mappings[model.id]&&(['front','back'] as const).map(side=><label key={side}>{t(side==='front'?'正面':'背面')}<AppSelect label={t(side === 'front' ? '正面' : '背面')} value={mappings[model.id][side]} onChange={value => setMappings({...mappings,[model.id]:{...mappings[model.id],[side]:value}})} options={model.fields.map(f => ({ value: f, label: f }))} /></label>)}
         </fieldset>)}
         <button className="btn-secondary" disabled={busy||offset.current>0} onClick={async()=>{setBusy(true);try{setPreview(await remapAnki(preview.stage,mappings));setPage(0)}catch(e){setError(String(e))}finally{setBusy(false)}}}>{t('重新生成预览')}</button>
       </details>}

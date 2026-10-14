@@ -1,0 +1,89 @@
+/* Compact settings layout, scoped to this page. */
+.settings-panel { display:flex; flex-direction:column; gap:28px; padding-bottom:8px; width:100%; max-width:1100px; }
+.settings-panel .fsrs-settings { gap:0; }
+.settings-panel .fsrs-title { display:flex; align-items:center; gap:10px; }
+.settings-panel .fsrs-heading h3 { margin:0; font-size:15px; font-weight:650; }
+.settings-panel .fsrs-badge { font-size:10px; letter-spacing:.06em; color:var(--ui-muted); }
+.settings-panel .fsrs-heading p { margin:4px 0 0; }
+.settings-panel .fsrs-chip { padding:4px 10px; font-size:11px; }
+.settings-panel .fsrs-overview { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; gap:24px; margin:18px 0; }
+.settings-panel .fsrs-retention { margin:0; }
+.settings-panel .fsrs-retention label { font-size:14px; font-weight:500; }
+.settings-panel .fsrs-retention strong { font-size:20px; font-variant-numeric:tabular-nums; }
+.settings-panel .fsrs-retention input { display:block; height:24px; margin:8px 0; }
+.settings-panel .fsrs-retention p { margin:0; font-size:12px; }
+.settings-panel .fsrs-forecast { margin:0; padding:14px 16px; gap:8px 16px; border:0; border-radius:8px; }
+.settings-panel .fsrs-forecast strong { display:block; font-size:22px; line-height:1.4; font-variant-numeric:tabular-nums; }
+.settings-panel .fsrs-forecast p { font-size:11px; line-height:1.6; }
+.settings-panel .fsrs-settings summary { min-height:44px; padding:12px 0; font-size:13px; }
+.settings-panel .fsrs-settings summary:focus-visible { outline:2px solid var(--ui-accent); outline-offset:3px; border-radius:4px; }
+.settings-panel .fsrs-actions { margin-top:8px; }
+.settings-panel .fsrs-personal,.settings-panel .fsrs-reschedule { margin-top:0; padding-top:0; }
+.settings-panel .fsrs-personal small { font-size:12px; }
+.settings-panel .settings-sections,.settings-panel .settings-general,.settings-panel .settings-models { gap:16px; }
+.settings-panel .settings-general { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.settings-panel .settings-study { grid-column:1/-1; }
+.settings-panel .settings-section { padding:18px 20px; gap:12px; }
+.settings-panel .settings-heading { min-height:28px; }
+.settings-panel .settings-section .section-title { font-size:15px; }
+.settings-panel .settings-section .section-copy { font-size:12px; line-height:1.7; }
+.settings-panel .settings-models { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.settings-panel .settings-shortcuts { gap:10px 24px; }
+.settings-savebar { position:sticky; bottom:0; z-index:10; display:flex; align-items:center; gap:12px; padding:14px 0; border-top:1px solid var(--ui-line); background:var(--ui-bg); }
+.settings-save-status { flex:1; min-width:0; font-size:12px; color:var(--ui-muted); overflow-wrap:anywhere; }
+.settings-savebar > .btn-primary { flex-shrink:0; }
+@media(max-width:760px) {
+  .settings-panel .fsrs-overview { grid-template-columns:1fr; gap:14px; margin-top:16px; }
+  .settings-panel .settings-general { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .settings-panel .settings-models { grid-template-columns:1fr; }
+  .settings-panel .settings-section,.settings-panel .fsrs-settings { padding:16px; }
+}
+@media(max-width:420px) {
+  .settings-panel .settings-general { grid-template-columns:1fr; }
+  .settings-panel .fsrs-heading { gap:8px; }
+  .settings-panel .fsrs-title { flex-wrap:wrap; gap:6px; }
+}
+
+
+
+.settings-savebar[data-dirty=true] .settings-save-status { color:var(--ui-accent); }
+.settings-panel .settings-savebar > .btn-primary { min-height:36px; min-width:100px; }
+.settings-panel .settings-savebar > .btn-primary:disabled { background:var(--ui-soft); color:var(--ui-muted); border:1px solid var(--ui-line); opacity:1; box-shadow:none; filter:none; }
+@media(max-width:639px) {
+  .settings-panel .settings-savebar { flex-wrap:wrap; gap:8px 12px; }
+  .settings-save-status { flex-basis:100%; font-size:12px; }
+  .settings-panel .settings-savebar > .btn-primary { min-height:44px; }
+}
+
+/* Shared surfaces and hierarchy for every settings group. */
+.mac-main > .settings-panel { max-width:1100px; }
+.settings-intro h2 { font-size:24px; font-weight:650; }
+.settings-intro p { margin-top:6px; color:var(--ui-muted); font-size:13px; }
+.settings-group { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.settings-group-title { font-size:13px; font-weight:600; color:var(--ui-muted); letter-spacing:0!important; }
+.settings-panel .settings-sections { gap:28px; }
+.settings-panel .settings-section { background:var(--ui-surface); border:1px solid var(--ui-line); border-radius:10px; box-shadow:none; }
+.settings-panel .fsrs-heading p { font-size:12px; }
+.settings-panel .fsrs-fields .app-field { height:44px; }
+.settings-panel .fsrs-settings details { border-top:1px solid var(--ui-line); }
+.settings-panel .fsrs-settings details[open] { padding-bottom:16px; }
+.settings-panel .fsrs-settings details:last-child[open] { padding-bottom:0; }
+.settings-panel .fsrs-settings summary { font-weight:500; }
+.settings-panel .fsrs-chip { color:var(--ui-muted); background:var(--ui-soft); border:1px solid var(--ui-line); }
+.settings-panel .fsrs-settings fieldset { min-width:0; }
+.settings-panel .settings-cloud:has(#settings-cloud-status:empty):not(:has(fieldset section)) { display:none; }
+.settings-panel #settings-cloud-status:empty { display:none; }
+.settings-panel .settings-cloud:has(fieldset section) #settings-cloud-status .settings-section { border-top:0; border-radius:0 0 10px 10px; }
+.settings-panel .settings-cloud:has(#cloud-sync-heading) fieldset .settings-section { border-radius:10px 10px 0 0; }
+.settings-panel .settings-cloud:has(fieldset section) #settings-cloud-status { margin-top:-12px; }
+.settings-panel .btn-secondary { min-height:36px; }
+@media(max-width:760px) {
+  .settings-panel { gap:24px; }
+  .settings-panel .settings-sections { gap:24px; }
+  .settings-panel .fsrs-fields { grid-template-columns:1fr; }
+  .settings-panel .btn-secondary { min-height:44px; }
+}
+@media(max-width:420px) {
+  .settings-panel .fsrs-heading { flex-wrap:wrap; }
+  .settings-panel .fsrs-heading > div { flex-basis:100%; }
+}

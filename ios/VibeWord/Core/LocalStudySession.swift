@@ -46,7 +46,7 @@ public struct LocalStudySession: Codable, Sendable {
         let cards = Dictionary(uniqueKeysWithValues: library.cards.map { ($0.id, $0) })
         return ids.compactMap { id in
             guard let card = cards[id], library.controls[id]?.available(on: today) ?? true,
-                  library.progress[id] == progress[id] else { return nil }
+                  library.progress[id] == progress[id], scope.matches(card, decks: library.decks), library.inDeck(card, deckID) else { return nil }
             return card
         }
     }

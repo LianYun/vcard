@@ -142,7 +142,7 @@ struct StudyCenterView: View {
             if section == 1 { statsSection }
             if section == 2 { backupSection }
         }
-        .navigationTitle(L(section == 0 ? "提前复习" : section == 1 ? "学习记录" : "备份与恢复"))
+        .navigationTitle(L(section == 0 ? "提前复习" : section == 1 ? "学习记录" : "备份与恢复")).navigationBarTitleDisplayMode(.inline)
         .toolbar { Button(L("关闭")) { dismiss() } }
         .onAppear { loadBackups() }
         .confirmationDialog(L("开始新的复习？"), isPresented: $replacing, titleVisibility: .visible) {
@@ -249,35 +249,33 @@ struct StudyTagSelector: View {
 struct TagStudyView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
-    @State private var selection: [String] = []
+    @State private var scope = StudyScope()
     @State private var initialized = false
     @State private var studying = false
-    @State private var all = false
     @State private var saveDefault = false
     @State private var replacing = false
     var body: some View {
-        let preview = StudySelection.make(library: store.library, scope: StudyScope(tags: all ? nil : selection))
+        let preview = StudySelection.make(library: store.library, scope: scope)
         let count = preview.reviews.count + preview.fresh.count
         Form {
             Section {
-                Toggle(L("全部卡片"), isOn: $all).accessibilityIdentifier("tags.all")
-                if !all { StudyTagSelector(cards: store.library.cards, selection: $selection) }
+                CompositeScopeEditor(scope: $scope, library: store.library, limit: store.library.newCardsPerDay)
                 Toggle(L("设为默认范围"), isOn: $saveDefault)
             } footer: { Text(L(saveDefault ? "开始后将保存为默认学习范围。" : "仅用于本次学习，不修改默认学习范围。")) }
             Section {
                 Text(L("本次可学：待复习 {0} 张 · 新卡 {1} 张", "\(preview.reviews.count)", "\(preview.fresh.count)"))
                     .accessibilityIdentifier("tags.preview")
                 Text(L("今日新卡剩余额度：{0} 张", "\(preview.budget)"))
-                if count == 0 { Text(L(!all && selection.isEmpty ? "请至少选择一个标签" : preview.emptyReason)).foregroundStyle(.secondary) }
+                if count == 0 { Text(L(!scope.isValid ? "请补全学习范围" : preview.emptyReason)).foregroundStyle(.secondary) }
                 Button(L("开始学习 · {0} 张", "\(count)")) {
                     if store.queue.isEmpty { start() } else { replacing = true }
                 }.disabled(count == 0).accessibilityIdentifier("tags.start")
             }
         }
-        .navigationTitle(L("本次复习范围"))
+        .navigationTitle(L("本次复习范围")).navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("关闭")) { dismiss() } } }
         .onAppear {
-            if !initialized { selection = store.library.studyScope.tags ?? []; all = store.library.studyScope.tags == nil; initialized = true }
+            if !initialized { scope = store.library.studyScope; initialized = true }
         }
         .confirmationDialog(L("开始新的复习？"), isPresented: $replacing, titleVisibility: .visible) {
             Button(L("开始新的复习")) { start() }
@@ -294,7 +292,6 @@ struct TagStudyView: View {
         } message: { Text(localizedMessage(store.error ?? "")) }
     }
     private func start() { Task {
-        let scope = StudyScope(tags: all ? nil : selection)
         if saveDefault {
             var event = SyncEvent(kind: .studyConfig, limit: store.library.newCardsPerDay)
             event.studyScope = scope

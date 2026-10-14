@@ -84,6 +84,18 @@ pub struct Card {
     pub created_at: i64,
 }
 
+fn row_to_card(row: &rusqlite::Row<'_>) -> rusqlite::Result<Card> {
+    Ok(Card {
+        id: row.get(0)?,
+        deck_id: row.get(6)?, note_id: row.get(7)?, anki: row.get::<_,Option<String>>(8)?.map(|v| serde_json::from_str(&v)).transpose().map_err(|e|rusqlite::Error::FromSqlConversionFailure(8,rusqlite::types::Type::Text,Box::new(e)))?,
+        front: row.get(1)?,
+        back: row.get(2)?,
+        example: row.get(3)?,
+        created_at: row.get(4)?,
+        tags: serde_json::from_str(&row.get::<_, String>(5)?).unwrap_or_default(),
+    })
+}
+
 #[tauri::command]
 pub fn get_cards(db: State<DbState>) -> Result<Vec<Card>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
@@ -91,21 +103,22 @@ pub fn get_cards(db: State<DbState>) -> Result<Vec<Card>, String> {
         .prepare("SELECT id, front, back, example, created_at, tags, deck_id, note_id, anki FROM cards ORDER BY created_at")
         .map_err(|e| e.to_string())?;
     let cards = stmt
-        .query_map([], |row| {
-            Ok(Card {
-                id: row.get(0)?,
-                deck_id: row.get(6)?, note_id: row.get(7)?, anki: row.get::<_,Option<String>>(8)?.map(|v| serde_json::from_str(&v)).transpose().map_err(|e|rusqlite::Error::FromSqlConversionFailure(8,rusqlite::types::Type::Text,Box::new(e)))?,
-                front: row.get(1)?,
-                back: row.get(2)?,
-                example: row.get(3)?,
-                created_at: row.get(4)?,
-                tags: serde_json::from_str(&row.get::<_, String>(5)?).unwrap_or_default(),
-            })
-        })
+        .query_map([], row_to_card)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     Ok(cards)
+}
+
+#[tauri::command]
+pub fn get_card(db: State<DbState>, id: String) -> Result<Option<Card>, String> {
+    use rusqlite::OptionalExtension;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    conn.query_row(
+        "SELECT id, front, back, example, created_at, tags, deck_id, note_id, anki FROM cards WHERE id = ?1",
+        [&id],
+        row_to_card,
+    ).optional().map_err(|e| e.to_string())
 }
 
 #[tauri::command]

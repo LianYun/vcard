@@ -4,6 +4,7 @@ import {
   deleteOneCard,
   incrementDailyStat,
   loadCustomCards,
+  loadCard,
   saveOneCard,
   saveAcceptedImportCards,
   updateOneCard,
@@ -15,8 +16,7 @@ export async function allCards(): Promise<Card[]> {
 }
 
 export async function findCard(id: string): Promise<Card | undefined> {
-  const cards = await allCards()
-  return cards.find((c) => c.id === id)
+  return loadCard(id)
 }
 
 export async function addCard(front: string, back: string, example?: string, noteId?: string, metadata?: Pick<Card, 'tags' | 'deckId'>): Promise<Card> {

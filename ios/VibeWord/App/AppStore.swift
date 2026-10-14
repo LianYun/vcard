@@ -9,6 +9,7 @@ final class AppStore: ObservableObject {
     @Published var done = 0
     @Published var relearned = 0
     @Published var total = 0
+    @Published var deckToReveal: String?
     @Published var sessionDeck: String?
     @Published var aheadDays = 0
     @Published private(set) var sessionScope = StudyScope()
@@ -54,7 +55,7 @@ final class AppStore: ObservableObject {
             queue.removeAll { previous.progress[$0.id] != library.progress[$0.id] }
         }
         let current = Dictionary(uniqueKeysWithValues: library.cards.map { ($0.id, $0) })
-        queue = queue.compactMap { card in guard let updated = current[card.id], library.inDeck(updated, sessionDeck), sessionScope.matches(updated), library.controls[card.id]?.available() ?? true else { return nil }; return updated }
+        queue = queue.compactMap { card in guard let updated = current[card.id], library.inDeck(updated, sessionDeck), sessionScope.matches(updated, decks: library.decks), library.controls[card.id]?.available() ?? true else { return nil }; return updated }
         if !saving { persistSession() }
         watchSync.refresh()
         if !localStateLoaded { restoreLocalState() }
@@ -68,9 +69,15 @@ final class AppStore: ObservableObject {
     }
     @discardableResult
     func add(_ cards: [Card]) async -> Bool {
-        await save(cards.flatMap { card in
-            [SyncEvent(kind: .add, card: card), SyncEvent(kind: .seed, progress: SchedulingState(cardId: card.id))]
-        })
+        pendingWrites += 1; saving = true
+        defer { pendingWrites -= 1; saving = pendingWrites > 0 }
+        do {
+            _ = try await persistence.commit { library in
+                guard cards.allSatisfy({ card in library.decks.contains { $0.id == (card.deckId ?? "default") } }) else { throw OpenFormat.failure("牌组不存在，请重新选择") }
+                return cards.flatMap { card in [SyncEvent(kind: .add, card: card), SyncEvent(kind: .seed, progress: SchedulingState(cardId: card.id))] }
+            }
+            return true
+        } catch { self.error = error.localizedDescription; return false }
     }
     func saveEditedCard(expected: Card, draft: Card, fields: [String: String]? = nil) async throws {
         pendingWrites += 1; saving = true
@@ -105,7 +112,7 @@ final class AppStore: ObservableObject {
                     let selection = StudySelection.make(library: scoped, scope: chosen)
                     reason = selection.emptyReason
                     if ahead > 0 {
-                        selected = StudyEngine.ahead(cards: scoped.cards.filter(chosen.matches), progress: library.progress, controls: library.controls, days: ahead)
+                        selected = StudyEngine.ahead(cards: scoped.cards.filter { chosen.matches($0, decks: library.decks) }, progress: library.progress, controls: library.controls, days: ahead)
                         return []
                     }
                     let events = library.issueEvents(selection.fresh.map(\.id))
@@ -119,7 +126,7 @@ final class AppStore: ObservableObject {
             }
         } catch { pendingWrites -= 1; saving = pendingWrites > 0; self.error = error.localizedDescription; return false }
         pendingWrites -= 1; saving = pendingWrites > 0
-        sessionDeck = deckId
+        sessionDeck = deckId ?? chosen.deckId
         sessionDay = Day.key()
         aheadDays = ahead; sessionScope = chosen; lastReviewID = nil
         emptyStudyReason = reason
@@ -242,11 +249,13 @@ final class AppStore: ObservableObject {
         aiWrites = write
         try await write.value
     }
-    func enqueue(_ word: String) async throws {
+    func enqueue(_ word: String, targetDeckId: String = "default") async throws {
         guard library.llm.isConfigured else { throw OpenFormat.failure("请先在设置中配置 AI 模型") }
         guard !word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw OpenFormat.failure("请先输入一个英文单词") }
-        let task = AITask(word: word.trimmingCharacters(in: .whitespacesAndNewlines))
-        try await mutateAI { $0.insert(task, at: 0) }; kick()
+        guard library.decks.contains(where: { $0.id == targetDeckId }) else { throw OpenFormat.failure("牌组不存在，请重新选择") }
+        var task = AITask(word: word.trimmingCharacters(in: .whitespacesAndNewlines)); task.targetDeckId = targetDeckId
+        let submitted = task
+        try await mutateAI { $0.insert(submitted, at: 0) }; kick()
     }
     func enqueueReplacement(_ card: Card, requirements: String) async throws {
         guard card.anki == nil else { throw OpenFormat.failure("Anki 模板卡暂不支持重新生成，请使用编辑 Anki 笔记") }
@@ -349,7 +358,7 @@ final class AppStore: ObservableObject {
                     var card = card
                     let direction = task.expected == nil ? (offset == 0 ? "enToCn" : "cnToEn") : "replacement"
                     let draftID = id + ":" + direction
-                    if task.expected == nil { card.id = "custom:ai:" + draftID; card.noteId = "note:ai:" + id }
+                    if task.expected == nil { card.id = "custom:ai:" + draftID; card.noteId = "note:ai:" + id; card.deckId = task.targetDeckId ?? "default" }
                     return AIDraft(id: draftID, direction: direction, card: card)
                 }
                 pendingAI[id] = drafts

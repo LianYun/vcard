@@ -1,24 +1,23 @@
 import { useEffect, useState } from 'react'
 import { allCards } from '../lib/cardStore'
 import { loadDecks, loadMeta, loadSettings, loadStudyData } from '../lib/storage'
-import { schedule } from '../lib/scheduler'
-import { available } from '../lib/study'
+import { selectStudyCards } from '../lib/study'
 import { todayKey } from '../lib/date'
 
 async function readSnapshot() {
   const [cards, data, settings, decks, meta] = await Promise.all([
     allCards(), loadStudyData({ includeReviews: false }), loadSettings(), loadDecks(), loadMeta(),
   ])
-  const result = schedule(cards.filter(card => available(data.controls[card.id])), data.progress, settings, meta)
-  return { cards, data, settings, decks, stats: {
-    due: result.dueReviews.length, newCards: result.newCards.length, total: cards.length,
+  const result = selectStudyCards(cards, data, settings, meta, null, decks)
+  return { cards, data, settings, decks, meta, stats: {
+    due: result.reviews.length, newCards: result.fresh.length, total: cards.length,
   } }
 }
 export type StudyDetailsSnapshot = Pick<Awaited<ReturnType<typeof readSnapshot>>, 'cards' | 'data'>
 export type LibrarySnapshot = Awaited<ReturnType<typeof readSnapshot>>
 
 // Owned by App so navigation never discards the last successful snapshot.
-export function useLibrarySnapshot(refreshKey: number) {
+export function useLibrarySnapshot(refreshKey: number, active = true) {
   const [snapshot, setSnapshot] = useState<LibrarySnapshot | null>(null)
   const [history, setHistory] = useState<StudyDetailsSnapshot | null>(null)
   const [historyError, setHistoryError] = useState<string | null>(null)
@@ -46,6 +45,7 @@ export function useLibrarySnapshot(refreshKey: number) {
     }
   }, [])
   useEffect(() => {
+    if (!active) return
     let cancelled = false
     // Coalesce an event and its mutation callback, including StrictMode setup.
     const timer = setTimeout(() => {
@@ -54,9 +54,9 @@ export function useLibrarySnapshot(refreshKey: number) {
       }).catch(reason => { if (!cancelled) setError(String(reason)) })
     }, 0)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [refreshKey, revision])
+  }, [refreshKey, revision, active])
   useEffect(() => {
-    if (!snapshot) return
+    if (!snapshot || !active) return
     let cancelled = false
     // Prefetch after the lightweight home snapshot; never delay today's counts.
     const timer = setTimeout(() => {
@@ -68,6 +68,6 @@ export function useLibrarySnapshot(refreshKey: number) {
       }).catch(reason => { if (!cancelled) setHistoryError(String(reason)) })
     }, 0)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [snapshot])
+  }, [snapshot, active])
   return { snapshot, error, history, historyError }
 }

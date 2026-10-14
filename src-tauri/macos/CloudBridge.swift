@@ -2,6 +2,98 @@ import AppKit
 import Foundation
 import UniformTypeIdentifiers
 
+// Device-local queue. Immutable task files plus an atomic manifest keep multi-task
+// updates crash-safe without rewriting image-heavy history on every confirmation.
+struct LocalAITaskStore {
+    let directory: URL
+    private struct Entry: Codable {
+        let id: String
+        let digest: String
+        let bytes: Int
+    }
+    private struct Manifest: Codable {
+        var version = 1
+        var tasks: [Entry] = []
+        var migratedImports: Bool?
+    }
+    private var folder: URL { directory.appendingPathComponent("ai-tasks-v2") }
+    private var manifestURL: URL { folder.appendingPathComponent("manifest.json") }
+    private func file(_ digest: String) -> URL { folder.appendingPathComponent(digest + ".json") }
+
+    private func manifest() throws -> Manifest {
+        if FileManager.default.fileExists(atPath: manifestURL.path) {
+            let value = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestURL))
+            guard value.version == 1, Set(value.tasks.map(\.id)).count == value.tasks.count,
+                  value.tasks.allSatisfy({ $0.bytes >= 0 && $0.digest.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil }) else {
+                throw OpenFormat.failure("任务队列格式无效，请备份后检查")
+            }
+            return value
+        }
+        let legacy = directory.appendingPathComponent("ai-tasks.json")
+        guard FileManager.default.fileExists(atPath: legacy.path) else { return Manifest() }
+        guard let state = try JSONSerialization.jsonObject(with: Data(contentsOf: legacy)) as? [String: Any],
+              state["version"] as? Int == 1, let tasks = state["tasks"] as? [[String: Any]] else {
+            throw OpenFormat.failure("任务队列格式无效，请备份后检查")
+        }
+        // Keep the legacy file untouched as a recovery copy. The manifest becomes
+        // authoritative only after every task has been durably written.
+        return try commit(previous: Manifest(), tasks: tasks, order: tasks.compactMap { $0["id"] as? String }, migratedImports: state["migratedImports"] as? Bool)
+    }
+
+    func load() throws -> [String: Any] {
+        let value = try manifest()
+        let tasks = try value.tasks.map { entry -> [String: Any] in
+            let data = try Data(contentsOf: file(entry.digest))
+            guard data.count == entry.bytes, OpenFormat.digest(data) == entry.digest,
+                  let task = try JSONSerialization.jsonObject(with: data) as? [String: Any], task["id"] as? String == entry.id else {
+                throw OpenFormat.failure("任务队列格式无效，请备份后检查")
+            }
+            return task
+        }
+        var result: [String: Any] = ["version": 1, "tasks": tasks]
+        if let migrated = value.migratedImports { result["migratedImports"] = migrated }
+        return result
+    }
+
+    func save(tasks: [[String: Any]], order: [String], migratedImports: Bool?) throws {
+        _ = try commit(previous: manifest(), tasks: tasks, order: order, migratedImports: migratedImports)
+    }
+
+    private func commit(previous: Manifest, tasks: [[String: Any]], order: [String], migratedImports: Bool?) throws -> Manifest {
+        guard Set(order).count == order.count else { throw OpenFormat.failure("任务队列格式无效，请备份后检查") }
+        var entries = Dictionary(uniqueKeysWithValues: previous.tasks.map { ($0.id, $0) })
+        var writes: [String: Data] = [:]
+        var seen = Set<String>()
+        let wanted = Set(order)
+        for task in tasks {
+            guard let id = task["id"] as? String, !id.isEmpty, wanted.contains(id), seen.insert(id).inserted,
+                  task["drafts"] is [[String: Any]] else { throw OpenFormat.failure("任务队列格式无效，请备份后检查") }
+            let data = try JSONSerialization.data(withJSONObject: task, options: [.sortedKeys])
+            let digest = OpenFormat.digest(data)
+            entries[id] = Entry(id: id, digest: digest, bytes: data.count)
+            writes[digest] = data
+        }
+        let ordered = try order.map { id -> Entry in
+            guard let entry = entries[id] else { throw OpenFormat.failure("任务队列格式无效，请备份后检查") }
+            return entry
+        }
+        guard ordered.reduce(0, { $0 + $1.bytes }) <= 50 * 1024 * 1024 else { throw OpenFormat.failure("导入草稿超过 50 MB，请删除旧任务后重试") }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for (digest, data) in writes where !FileManager.default.fileExists(atPath: file(digest).path) {
+            try data.write(to: file(digest), options: .atomic)
+        }
+        let next = Manifest(tasks: ordered, migratedImports: migratedImports)
+        try JSONEncoder().encode(next).write(to: manifestURL, options: .atomic)
+        // Cleanup is best-effort and follows the commit. A cleanup failure must
+        // never turn an already successful save into a reported failure.
+        let keep = Set(ordered.map { $0.digest + ".json" }).union(["manifest.json"])
+        if let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) {
+            for url in files where url.pathExtension == "json" && !keep.contains(url.lastPathComponent) { try? FileManager.default.removeItem(at: url) }
+        }
+        return next
+    }
+}
+
 @MainActor
 final class CloudBridge {
     static let shared = CloudBridge()
@@ -135,9 +227,13 @@ final class CloudBridge {
             var event = SyncEvent(kind: .studyConfig, limit: limit)
             // Older clients changing only the limit must preserve the saved range.
             if args.keys.contains("studyScope") {
-                let tags = try decode("studyScope", [String]?.self)
-                if let tags, tags.isEmpty { throw OpenFormat.failure("请至少选择一个标签") }
-                event.studyScope = StudyScope(tags: tags.map { Array(Set($0.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })).sorted() })
+                let scope = try decode("studyScope", StudyScope.self)
+                guard scope.isValid else { throw OpenFormat.failure("请补全学习范围") }
+                event.studyScope = scope
+            }
+            if args.keys.contains("studyDeckId") {
+                if event.studyScope == nil { event.studyScope = library.studyScope }
+                event.studyScope?.deckId = try decode("studyDeckId", String?.self)
             }
             return event
         }
@@ -249,18 +345,18 @@ final class CloudBridge {
             guard FileManager.default.fileExists(atPath: url.path) else { throw DocumentImport.failure("页面图片已丢失，请重新导入文档") }
             return "data:image/jpeg;base64," + (try Data(contentsOf: url)).base64EncodedString()
         case "aiTasks":
-            let url = directory.appendingPathComponent("ai-tasks.json")
-            guard FileManager.default.fileExists(atPath: url.path) else { return NSNull() }
-            return try JSONSerialization.jsonObject(with: Data(contentsOf: url))
+            return try LocalAITaskStore(directory: directory).load()
         case "saveAITasks":
-            guard let state = args["state"] as? [String: Any], state["version"] as? Int == 1, state["tasks"] is [[String: Any]] else { throw OpenFormat.failure("任务队列格式无效，请备份后检查") }
-            let data = try JSONSerialization.data(withJSONObject: state)
-            guard data.count <= 50 * 1024 * 1024 else { throw OpenFormat.failure("导入草稿超过 50 MB，请删除旧任务后重试") }
-            try data.write(to: directory.appendingPathComponent("ai-tasks.json"), options: [.atomic])
+            guard let state = args["state"] as? [String: Any], state["version"] as? Int == 1,
+                  let tasks = state["tasks"] as? [[String: Any]] else { throw OpenFormat.failure("任务队列格式无效，请备份后检查") }
+            try LocalAITaskStore(directory: directory).save(tasks: tasks, order: tasks.compactMap { $0["id"] as? String }, migratedImports: state["migratedImports"] as? Bool)
+        case "patchAITasks":
+            guard let objects = args["tasks"] as? [[String: Any]] else { throw OpenFormat.failure("任务队列格式无效，请备份后检查") }
+            try LocalAITaskStore(directory: directory).save(tasks: objects, order: try decode("order", [String].self), migratedImports: args["migratedImports"] as? Bool)
         case "confirmAIDraft":
             let card = try decode("card", Card.self), draftID = try decode("draftId", String.self)
             let expected = args["expected"] == nil || args["expected"] is NSNull ? nil : try decode("expected", Card.self)
-            try append(AIConfirmation.events(existing: store.load(), draftID: draftID, card: card, expected: expected))
+            try append(AIConfirmation.events(existing: store.load(), draftID: draftID, card: card, expected: expected, library: library))
         case "importJobs":
             let url = directory.appendingPathComponent("document-imports.json")
             guard FileManager.default.fileExists(atPath: url.path) else { return [] as [Any] }
@@ -282,9 +378,19 @@ final class CloudBridge {
             try append(cards.filter { !known.contains($0.id) }.flatMap {
                 [SyncEvent(kind: .add, card: $0), SyncEvent(kind: .seed, progress: SchedulingState(cardId: $0.id))]
             })
+        case "card":
+            let id = try decode("id", String.self)
+            return try encode(library.cards.first { $0.id == id })
+        case "libraryTags":
+            let url = directory.appendingPathComponent("library-tags.json")
+            guard FileManager.default.fileExists(atPath: url.path) else { return [] as [String] }
+            return try JSONDecoder().decode([String].self, from: Data(contentsOf: url))
+        case "saveLibraryTags":
+            let tags = try decode("tags", [String].self)
+            try JSONEncoder().encode(tags).write(to: directory.appendingPathComponent("library-tags.json"), options: [.atomic])
         case "cards": return try encode(library.cards)
         case "progress": return try encode(library.progress)
-        case "settings": return ["newCardsPerDay": library.newCardsPerDay, "studyScope": try encode(library.studyScope.tags)]
+        case "settings": return ["newCardsPerDay": library.newCardsPerDay, "studyScope": try encode(library.studyScope), "studyDeckId": NSNull()]
         case "meta": return ["newCardsDate": Day.key(), "newCardsIssued": library.issued[Day.key()]?.count ?? 0]
         case "llm": return try encode(library.llm)
         case "image": return try encode(library.image)
@@ -367,14 +473,14 @@ final class CloudBridge {
         case "startStudy":
             let ahead = try decode("ahead", Int.self)
             guard (0...5).contains(ahead) else { throw OpenFormat.failure("提前学习天数必须为 1–5") }
-            let scope = StudyScope(tags: try decode("scope", [String]?.self))
+            let scope = try decode("scope", StudyScope.self)
             let deckId = try decode("deckId", String?.self)
             let day = Day.key(), selectionStart = Date()
             var scoped = library
             if let deckId { scoped.cards = library.cards.filter { library.inDeck($0, deckId) } }
             var selected: [Card], reason: String, events: [SyncEvent]
             if ahead > 0 {
-                selected = StudyEngine.ahead(cards: scoped.cards.filter(scope.matches), progress: library.progress, controls: library.controls, days: ahead, today: day)
+                selected = StudyEngine.ahead(cards: scoped.cards.filter { scope.matches($0, decks: library.decks) }, progress: library.progress, controls: library.controls, days: ahead, today: day)
                 reason = "当前范围暂无待学卡片"; events = []
             } else {
                 let selection = StudySelection.make(library: scoped, scope: scope, today: day)

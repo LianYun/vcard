@@ -68,7 +68,13 @@ enum LegacyImport {
         let settings = Dictionary(uniqueKeysWithValues: try rows("SELECT * FROM settings").compactMap { row -> (String, String)? in
             guard let key = row["key"], let value = row["value"] else { return nil }; return (key, value)
         })
-        if let limit = settings["new_cards_per_day"].flatMap(Int.init) { add(SyncEvent(kind: .studyConfig, limit: limit), "study") }
+        if settings["new_cards_per_day"] != nil || settings["study_scope"] != nil || settings["study_deck_id"] != nil {
+            var event = SyncEvent(kind: .studyConfig, limit: settings["new_cards_per_day"].flatMap(Int.init))
+            var scope = try settings["study_scope"].map { try JSONDecoder().decode(StudyScope.self, from: Data($0.utf8)) } ?? StudyScope()
+            if let deck = settings["study_deck_id"], !deck.isEmpty { scope.deckId = deck }
+            event.studyScope = scope
+            add(event, "study")
+        }
         for prefix in ["llm", "image"] {
             if settings["\(prefix)_base_url"] != nil {
                 var config = APIConfig()

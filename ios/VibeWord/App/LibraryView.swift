@@ -11,6 +11,15 @@ struct CardsView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Binding var highlighted: String?
     var onSettings: () -> Void
+    @State private var deckMode = true
+    @State private var activeDeck: String?
+    @State private var editingDeck: Deck?
+    @State private var moving = false
+    @State private var collecting = false
+    @State private var deletingDeck = false
+    @State private var deckBusy = false
+    @State private var deckNotice = ""
+    @State private var studyingDeck = false
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var query = ""
     @State private var filter = StudyFilter.all
@@ -28,7 +37,7 @@ struct CardsView: View {
     private var tags: [String] { Array(Set(store.library.cards.flatMap { $0.tags ?? [] })).sorted() }
     private var filtered: [Card] {
         let cards = store.library.cards.filter { card in
-            filter.matches(card, library: store.library) &&
+            store.library.inDeck(card, activeDeck) && filter.matches(card, library: store.library) &&
             (tag == nil || (tag == "" ? (card.tags ?? []).isEmpty : (card.tags ?? []).contains(tag!))) &&
             (query.isEmpty || "\(card.front)\n\(card.back)\n\(card.example ?? "")".localizedCaseInsensitiveContains(query))
         }
@@ -60,23 +69,49 @@ struct CardsView: View {
             if pendingSettings { pendingSettings = false; onSettings() }
         }) {
             NavigationStack {
-                AddView(jump: { id in
+                AddView(initialDeckID: activeDeck ?? "default", jump: { id in
                     adding = false
                     highlighted = id
                 }, onSettings: { pendingSettings = true; adding = false })
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("关闭")) { adding = false } } }
             }.modifier(StoreErrorAlert())
         }
+        .sheet(item: $editingDeck) { deck in DeckEditorView(draft: deck) { saved in deckMode = true; activeDeck = saved.id; resetDeckFilters() } }
+        .sheet(isPresented: $moving) { MoveCardsView(ids: selected) { selected = []; selecting = false } }
+        .sheet(isPresented: $collecting) { MoveCardsView(destination: activeDeck) { } }
+        .fullScreenCover(isPresented: $studyingDeck) { NavigationStack { StudyView(exitTitle: "返回牌组") }.modifier(StoreErrorAlert()) }
+        .onChange(of: store.deckToReveal) { _, id in
+            if let id { deckMode = true; activeDeck = store.library.decks.contains { $0.id == id } ? id : nil; resetDeckFilters(); store.deckToReveal = nil }
+        }
+        .onChange(of: store.library.decks) { _, decks in
+            if let activeDeck, !decks.contains(where: { $0.id == activeDeck }) { self.activeDeck = nil; deckNotice = L("牌组已删除"); resetDeckFilters() }
+        }
+        .confirmationDialog(L("删除牌组（保留卡片）"), isPresented: $deletingDeck, titleVisibility: .visible) {
+            Button(L("确认删除"), role: .destructive) {
+                guard let activeDeck, !deckBusy else { return }; deckBusy = true
+                Task { defer { deckBusy = false }; do { try await store.removeDeck(activeDeck); self.activeDeck = nil } catch { store.error = error.localizedDescription } }
+            }
+        } message: { Text(L("删除「{0}」后，直属卡片移至默认牌组，学习进度保留；子牌组提升一级。", store.library.decks.first { $0.id == activeDeck }?.name ?? "")) }
         .sheet(isPresented: $filters) { filterSheet }
         .fullScreenCover(isPresented: $quick) { NavigationStack { QuickLearningView(cards: filtered) } }
         .onChange(of: highlighted) { _, id in
             guard let id else { return }
-            query = ""; tag = nil; filter = .all
+            deckMode = false; activeDeck = nil; query = ""; tag = nil; filter = .all
             open(id, ids: store.library.cards.map(\.id)); highlighted = nil
         }
     }
     private var library: some View {
         List {
+            Section {
+                Picker(L("卡片库"), selection: $deckMode) { Text(L("牌组")).tag(true); Text(L("全部卡片")).tag(false) }.pickerStyle(.segmented)
+                    .onChange(of: deckMode) { _, value in if !value { activeDeck = nil }; resetDeckFilters() }
+                Button(L("新建牌组"), systemImage: "plus") { editingDeck = Deck(id: UUID().uuidString, name: "") }
+                if !deckNotice.isEmpty { Text(deckNotice).font(.caption) }
+            }
+            if deckMode && activeDeck == nil {
+                Section { DeckTree { id in activeDeck = id; resetDeckFilters() } } header: { Text(L("按主题整理卡片，选择牌组开始学习。")) }
+            } else {
+            if deckMode, let activeDeck { deckHeader(activeDeck) }
             if !selecting {
                 if let id = store.reading.cardID, let card = store.library.cards.first(where: { $0.id == id }) {
                     Button { open(id, ids: store.reading.ids) } label: {
@@ -143,6 +178,7 @@ struct CardsView: View {
                     else { Button(L("清除筛选")) { query = ""; filter = .all; tag = nil } }
                 }
             } header: { Text(L("共 {0} 张卡片", "\(filtered.count)")) }
+            }
         }
         .navigationTitle(L("卡片"))
         .navigationBarTitleDisplayMode(.inline)
@@ -176,6 +212,29 @@ struct CardsView: View {
             }
         }
     }
+    private func resetDeckFilters() { query = ""; tag = nil; filter = .all; selected = []; selecting = false; route = nil }
+    private func deckHeader(_ id: String) -> some View {
+        Section {
+            Button(L("‹ 返回牌组")) { activeDeck = nil; resetDeckFilters() }
+            Text(store.library.deckPath(id)).font(.title2).bold()
+            Text(L("{0} 张 · 今日可学 {1}", "\(store.library.cards.filter { store.library.inDeck($0, id) }.count)", "\(store.deckStudyCount(id))")).font(.caption)
+            Text(L("包含子牌组 · 学习使用整个牌组，浏览筛选不影响学习范围")).font(.caption).foregroundStyle(.secondary)
+            Button(L(store.deckStudyCount(id) > 0 ? "开始学习" : "今日已完成"), systemImage: "play.fill") {
+                Task { if await store.startSession(scope: StudyScope(), deckId: id) { studyingDeck = true } }
+            }.disabled(store.deckStudyCount(id) == 0 || store.saving)
+            Button(L("添加卡片"), systemImage: "plus") { adding = true }
+            Button(L("从现有卡片移入")) { collecting = true }
+            DisclosureGroup(L("管理牌组")) {
+                Button(L("编辑牌组")) { editingDeck = store.library.decks.first { $0.id == id } }
+                Button(L("新建子牌组")) { var deck = Deck(id: UUID().uuidString, name: ""); deck.parentId = id; editingDeck = deck }
+                if id != "default" { Button(L("删除牌组（保留卡片）"), role: .destructive) { deletingDeck = true } }
+            }.disabled(deckBusy)
+            ForEach(store.library.decks.filter { $0.parentId == id }) { child in
+                Button(child.name, systemImage: "folder") { activeDeck = child.id; resetDeckFilters() }
+            }
+            if !store.library.cards.contains(where: { store.library.inDeck($0, id) }) { Text(L("这个牌组还没有卡片，添加新卡片或从卡片库移入。")).font(.caption) }
+        }
+    }
     private var filterSheet: some View {
         NavigationStack {
             Form {
@@ -188,7 +247,7 @@ struct CardsView: View {
                 Picker(L("排序"), selection: $sort) {
                     Text(L("最近添加")).tag(0); Text(L("按标题排序")).tag(1)
                 }
-            }.navigationTitle(L("筛选"))
+            }.navigationTitle(L("筛选")).navigationBarTitleDisplayMode(.inline)
                 .toolbar { Button(L("完成")) { filters = false } }
         }.presentationDetents([.medium, .large])
     }

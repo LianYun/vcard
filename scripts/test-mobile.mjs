@@ -25,7 +25,7 @@ const { generationQueue: queue } = load('src/lib/generationQueue.ts', {
   './documentImport': {},
   './llm': { generateCardsWithImage: (word, config, image, signal) => new Promise(resolve => jobs.push({ word, config, signal, resolve })) },
   './storage': { loadImageGenConfig: async () => null,
-    loadAITasks: async () => ({ version: 1, tasks: [], migratedImports: true }), saveAITasks: async () => {},
+    loadDecks: async () => [{ id: 'default', name: 'Default' }], loadAITasks: async () => ({ version: 1, tasks: [], migratedImports: true }), saveAITasks: async () => {},
     loadLLMConfig: async () => ({ ...config }), confirmAIDraft: async (id, card) => { saved.push(card.front) } },
 })
 const first = await queue.enqueue('a')

@@ -20,7 +20,7 @@ pub fn run() {
     let builder = builder.manage(DbState(Mutex::new(db::init_db())))
         .invoke_handler(tauri::generate_handler![
             cloud::native_cloud_storage, cloud::cloud_storage, cloud::set_settings_dirty, cloud::finish_exit,
-            db::confirm_ai_draft, db::get_cards, db::save_card, db::update_card, db::replace_regenerated_card, db::delete_card,
+            db::confirm_ai_draft, db::get_cards, db::get_card, db::save_card, db::update_card, db::replace_regenerated_card, db::delete_card,
             db::get_progress, db::save_progress, db::delete_progress,
             db::get_setting, db::set_setting, db::get_all_settings,
             db::increment_daily_stat, db::get_daily_stats,

@@ -45,7 +45,7 @@ struct TaskQueueView: View {
                     }
                 } header: { HStack { Text(task.word).lineLimit(1); Spacer(); if task.status == "running" { ProgressView() }; Text(L(aiStatusLabel(task.status))) } }
             }
-        }.navigationTitle(L("任务队列"))
+        }.navigationTitle(L("任务队列")).navigationBarTitleDisplayMode(.inline)
         .toolbar { Button(L("清理已结束记录")) { Task { do { try await store.clearFinishedAI() } catch { store.error = error.localizedDescription } } } }
     }
 }
@@ -85,11 +85,12 @@ struct AITaskDetail: View {
                         Text(L("牌组") + " · " + store.library.deckPath(draft.card.deckId ?? "default"))
                         Text(L("标签") + " · " + (draft.card.tags ?? []).joined(separator: ", "))
                         if draft.status == "ready" {
+                            if !store.library.decks.contains(where: { $0.id == (draft.card.deckId ?? "default") }) { Text(L("牌组不存在，请重新选择")).foregroundStyle(.red) }
                             HStack {
                                 Button(L("编辑草稿")) { editing = draft }.buttonStyle(.bordered)
                                 Button(L("丢弃草稿"), role: .destructive) { action(advance: true) { try await store.discardAI(taskID: task.id, draftID: draft.id) } }.buttonStyle(.bordered)
                             }
-                            Button(L(task.kind == "replacement" ? "确认替换" : "确认入库")) { action(advance: true) { try await store.confirmAI(taskID: task.id, draftID: draft.id) } }.buttonStyle(.borderedProminent).accessibilityIdentifier("ai.confirm")
+                            Button(L(task.kind == "replacement" ? "确认替换" : "确认入库")) { action(advance: true) { try await store.confirmAI(taskID: task.id, draftID: draft.id) } }.buttonStyle(.borderedProminent).disabled(!store.library.decks.contains { $0.id == (draft.card.deckId ?? "default") }).accessibilityIdentifier("ai.confirm")
                             Text(L(task.kind == "replacement" ? "确认后替换原卡，学习进度保留。" : "仅确认当前这张卡片，其他草稿继续等待审核。")).font(.caption).foregroundStyle(.secondary)
                             DisclosureGroup(L("重新生成草稿")) {
                                 TextField(L("生成要求"), text: $guidance, axis: .vertical).lineLimit(3...6)
@@ -100,7 +101,7 @@ struct AITaskDetail: View {
                 } else { Text(L("选择任务查看详情")) }
                 if let error { Text(localizedMessage(error)).foregroundStyle(.red) }
             }.padding(20).disabled(busy)
-        }.navigationTitle(L("审核卡片"))
+        }.navigationTitle(L("审核卡片")).navigationBarTitleDisplayMode(.inline)
         .sheet(item: $editing) { draft in AIDraftEditor(taskID: taskID, draft: draft) }
     }
     private func face(_ title: String, content: String) -> some View {
@@ -135,7 +136,7 @@ struct AIDraftEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker(L("牌组"), selection: Binding(get: { draft.card.deckId ?? "default" }, set: { draft.card.deckId = $0 })) { ForEach(store.library.decks) { Text(store.library.deckPath($0.id)).tag($0.id) } }
+                    DeckPicker(selection: Binding(get: { draft.card.deckId ?? "default" }, set: { draft.card.deckId = $0 }))
                     TextField(L("标签（用逗号分隔，清空可移除）"), text: $tags)
                     Toggle(L("卡片预览"), isOn: $preview)
                     Text(L("保存草稿后仍需确认入库。")).font(.caption)
@@ -149,7 +150,7 @@ struct AIDraftEditor: View {
                     Section(L("例句")) { TextField(L("例句"), text: Binding(get: { draft.card.example ?? "" }, set: { draft.card.example = $0 }), axis: .vertical) }
                 }
                 if let error { Text(localizedMessage(error)).foregroundStyle(.red) }
-            }.disabled(saving).navigationTitle(L("编辑草稿"))
+            }.disabled(saving).navigationTitle(L("编辑草稿")).navigationBarTitleDisplayMode(.inline)
             .onAppear { if original == nil { original = draft; tags = (draft.card.tags ?? []).joined(separator: ", ") } }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L("取消")) { if dirty { leaving = true } else { dismiss() } }.disabled(saving) }

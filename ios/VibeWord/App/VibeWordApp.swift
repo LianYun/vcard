@@ -57,8 +57,8 @@ struct RootView: View {
             } else { ProgressView(L("正在加载 Vibe Word…")) }
         }
         .sheet(isPresented: $settings) { SettingsSheet() }
-        .fullScreenCover(isPresented: $studying) {
-            NavigationStack { StudyView(exitTitle: "返回复习") }.modifier(StoreErrorAlert())
+        .fullScreenCover(isPresented: $studying, onDismiss: { if let id = store.sessionDeck { tab = 1; store.deckToReveal = id } }) {
+            NavigationStack { StudyView(exitTitle: store.sessionDeck == nil ? "返回复习" : "返回牌组") }.modifier(StoreErrorAlert())
         }
         .onChange(of: phase) { _, phase in
             if phase == .active { store.setAIActive(true); Task { await persistence.synchronize() } }

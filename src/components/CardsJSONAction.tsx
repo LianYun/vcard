@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { fileStorageAction, loadCloudStatus } from '../lib/storage'
 import { localizedMessage, t } from '../lib/i18n'
 
-export function CardsJSONAction({ kind, onChanged }: { kind: 'importCards' | 'exportCards'; onChanged?: () => void }) {
+export function CardsJSONAction({ kind, onChanged, compact = false }: { compact?: boolean; kind: 'importCards' | 'exportCards'; onChanged?: () => void }) {
   const [available, setAvailable] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -22,7 +22,7 @@ export function CardsJSONAction({ kind, onChanged }: { kind: 'importCards' | 'ex
     finally { setBusy(false) }
   }
   return <div>
-    <button className="btn-secondary" disabled={busy} onClick={() => void run()}>{busy ? t('处理中…') : kind === 'importCards' ? t('导入卡片 CSV / JSON') : t('导出卡片 JSON')}</button>
+    <button className={compact ? undefined : "btn-secondary"} disabled={busy} onClick={() => void run()}>{compact && kind === 'exportCards' ? <><strong>{busy ? t('处理中…') : t('卡片 JSON')}</strong><span>{t('导出整个卡库，可重新导入；不受筛选和勾选影响')}</span></> : busy ? t('处理中…') : kind === 'importCards' ? t('导入卡片 CSV / JSON') : t('导出卡片 JSON')}</button>
     {message && <p role="status" className="mt-2 text-sm">{message}</p>}
     {error && <p role="alert" className="mt-2 text-sm text-red-600">{localizedMessage(error)}</p>}
   </div>

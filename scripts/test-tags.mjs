@@ -6,7 +6,7 @@ import ts from 'typescript'
 function load(file, deps = {}, globals = {}) {
   const module = { exports: {} }
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
-  vm.runInNewContext(code, { module, exports: module.exports, Date, Math, console, require: name => { if(name==='./fsrs') return fsrsTestDependency; assert.ok(name in deps, name); return deps[name] }, ...globals })
+  vm.runInNewContext(code, { module, exports: module.exports, Date, Math, console, require: name => { if(name==='./fsrs') return fsrsTestDependency; if(name==='./forgotten') return load('src/lib/forgotten.ts', {'./date': load('src/lib/date.ts')}); assert.ok(name in deps, name); return deps[name] }, ...globals })
   return module.exports
 }
 const tags = load('src/lib/tags.ts')
@@ -41,15 +41,16 @@ const CardView = () => {}
 const mod = { exports: {} }
 const source = ts.transpileModule(fs.readFileSync('src/components/BrowsePage.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
 const dependencies = {
+  './AppSelect': { AppSelect: () => {} },
   './CardEditor': { useCardEditor: () => () => {} },
   '../lib/cardStore': { allCards: async () => cards },
   '../hooks/useShortcuts': { useShortcuts: () => ({}) },
   '../lib/shortcuts': { shortcutAction: () => null },
-  react: { useEffect() {}, useState(initial) { const key = cursor++; if (!(key in state)) state[key] = initial; return [state[key], value => { state[key] = typeof value === 'function' ? value(state[key]) : value }] } },
-  '../lib/storage': {loadStudyData:async()=>({controls:{},reviews:[],progress:{},issued:{}})}, '../lib/study': load('src/lib/study.ts',{'./date':date,'./sm2':sm2,'./decks': load('src/lib/decks.ts', {'./sm2': load('src/lib/sm2.ts', {'./date': load('src/lib/date.ts')})}), './tags':tags}),
+  react: { useEffect() {}, useState(initial) { const key = cursor++; if (!(key in state)) state[key] = typeof initial === 'function' ? initial() : initial; return [state[key], value => { state[key] = typeof value === 'function' ? value(state[key]) : value }] } },
+  '../lib/storage': {loadStudyData:async()=>({controls:{},reviews:[],progress:{},issued:{}})}, '../lib/study': load('src/lib/study.ts',{'./forgotten': load('src/lib/forgotten.ts', {'./date':date}), './date':date,'./sm2':sm2,'./decks': load('src/lib/decks.ts', {'./sm2': load('src/lib/sm2.ts', {'./date': load('src/lib/date.ts')})}), './tags':tags}),
   'react/jsx-runtime': { jsx, jsxs: jsx }, '../lib/i18n': { t: x => x }, '../lib/tags': tags, './CardView': { CardView },
 }
-vm.runInNewContext(source, { module: mod, exports: mod.exports, require: name => { if(name==='./fsrs') return fsrsTestDependency; assert.ok(name in dependencies, `Unexpected dependency: ${name}`); return dependencies[name] } })
+vm.runInNewContext(source, { module: mod, exports: mod.exports, require: name => { if(name==='./fsrs') return fsrsTestDependency; if(name==='./forgotten') return load('src/lib/forgotten.ts', {'./date': load('src/lib/date.ts')}); assert.ok(name in dependencies, `Unexpected dependency: ${name}`); return dependencies[name] } })
 function render() { cursor = 0; elements = []; mod.exports.BrowsePage({ cards, onExit() {} }) }
 function button(name) { return elements.find(e => e.type === 'button' && (Array.isArray(e.props.children) ? e.props.children.includes(name) : e.props.children === name)).props }
 const allBefore = JSON.stringify([...data])

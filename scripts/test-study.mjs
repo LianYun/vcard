@@ -10,7 +10,7 @@ function load(file,deps={},globals={}) {
  vm.runInNewContext(code,{module,exports:module.exports,Date,Math,console,crypto:webcrypto,require:n=>{ if(n==='./fsrs') return fsrsTestDependency;assert.ok(n in deps,n);return deps[n]},...globals});return module.exports
 }
 const date=load('src/lib/date.ts'),sm2=load('src/lib/sm2.ts',{'./date':date}),tags=load('src/lib/tags.ts')
-const study=load('src/lib/study.ts',{'./date':date,'./sm2':sm2,'./decks': load('src/lib/decks.ts', {'./sm2': load('src/lib/sm2.ts', {'./date': load('src/lib/date.ts')})}), './tags':tags})
+const study=load('src/lib/study.ts',{'./forgotten': load('src/lib/forgotten.ts', {'./date':date}), './date':date,'./sm2':sm2,'./decks': load('src/lib/decks.ts', {'./sm2': load('src/lib/sm2.ts', {'./date': load('src/lib/date.ts')})}), './tags':tags})
 // Exercise sibling spacing with different pool sizes and seeded random orders.
 let randomSeed = 42
 const random = () => ((randomSeed = (randomSeed * 1664525 + 1013904223) >>> 0) / 4294967296)

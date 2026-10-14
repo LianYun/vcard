@@ -57,9 +57,13 @@ export type ProgressMap = Record<string, SchedulingState>
 
 /** User settings (new cards per day budget). */
 /** null = all cards; [] = no selection; empty tag = untagged. */
-export type StudyScope = string[] | null
+export interface StudyScopeRule { deckIds: string[] | null; tags: string[] | null }
+export interface CompositeStudyScope { version: 2; mode: 'all' | 'custom'; rules: StudyScopeRule[] }
+/** Legacy arrays remain accepted at older study entry points. Persist version 2. */
+export type StudyScope = CompositeStudyScope | string[] | null
 
 export interface Settings {
+  studyDeckId?: string | null
   studyScope?: StudyScope
   /** Max new cards introduced per day. */
   newCardsPerDay: number

@@ -8,8 +8,11 @@ const requests = []
 let config = { baseURL: 'https://fixture.invalid', apiKey: 'fixture', model: 'first-model' }
 let writesFail = false
 const module = { exports: {} }
+const tagsModule = { exports: {} }
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/tags.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports: tagsModule.exports, module: tagsModule })
 const deps = {
-  './storage': { loadAITasks: async () => ({ version: 1, tasks: [], migratedImports: true }), saveAITasks: async () => { if (writesFail) throw new Error('Save failed') }, loadLLMConfig: async () => ({ ...config }), loadImageGenConfig: async () => null },
+  './tags': tagsModule.exports,
+  './storage': { loadDecks: async () => [{ id: 'default', name: 'Default' }], loadAITasks: async () => ({ version: 1, tasks: [], migratedImports: true }), saveAITasks: async () => { if (writesFail) throw new Error('Save failed') }, loadLLMConfig: async () => ({ ...config }), loadImageGenConfig: async () => null },
   './llm': { generateCardsWithImage: (word, model, image, signal) => new Promise((resolve, reject) => requests.push({ word, model, signal, resolve, reject })) },
   './documentImport': {},
 }
@@ -65,3 +68,19 @@ await until(() => requests.length === 6)
 requests[5].resolve(result('saved retry'))
 await until(() => storageFailure.getSnapshot()[0].status === 'review')
 console.log('PASS retry: same task/phrase, current model, error/time reset, duplicate-click dedup, immediate cancellation retry waits for old worker, stale result rejection, save failure retry')
+
+// Deleting an attention task must survive a failed write and ignore late responses.
+const deleting = new GenerationQueue(), deleteTask = await deleting.enqueue('delete phrase')
+await until(() => requests.length === 7)
+await assert.rejects(deleting.deleteTask(deleteTask.id), /只能删除/)
+await deleting.pause(deleteTask.id)
+writesFail = true
+await assert.rejects(deleting.deleteTask(deleteTask.id), /Save failed/)
+assert.equal(deleting.getSnapshot()[0].status, 'paused')
+writesFail = false
+await deleting.deleteTask(deleteTask.id)
+requests[6].resolve(result('late deleted result'))
+await tick(); await tick()
+assert.equal(deleting.getSnapshot().length, 0)
+await deleting.deleteTask(deleteTask.id)
+console.log('PASS delete: active task guard, save failure preserves task, paused task removal, late response cannot restore task, repeated delete')

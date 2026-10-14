@@ -97,6 +97,7 @@ struct StudyView: View {
         let _ = interfaceLanguage
         let _ = clockTick
         VStack(spacing: 18) {
+            if let id = store.sessionDeck { Text(store.library.deckPath(id)).font(.headline) }
                 HStack(spacing: 12) {
                     Button { dismiss() } label: {
                         Image(systemName: "chevron.left")
@@ -132,9 +133,9 @@ struct StudyView: View {
                     .accessibilityLabel(L("学习工具"))
                 }
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                Text(L("学习范围：{0}", store.sessionScope.label))
+                StudyScopeSummaryView(scope: store.sessionScope, decks: store.library.decks)
                     .font(.caption).foregroundStyle(.secondary)
-                    .lineLimit(2).dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .accessibilityIdentifier("study.scope")
                 if store.aheadDays > 0 {
                     Text(L("提前学习 {0} 天", "\(store.aheadDays)"))
@@ -203,7 +204,7 @@ struct StudyView: View {
                             HStack { Text(Date(timeIntervalSince1970: record.timestamp / 1000), style: .date); Spacer(); Text(ReviewGrade(rawValue: record.quality)?.title ?? "—"); if record.undone { Text(L("已撤销")) } }
                         }
                     }
-                }.navigationTitle(L("学习详情")).toolbar { Button(L("关闭")) { details = false } }
+                }.navigationTitle(L("学习详情")).navigationBarTitleDisplayMode(.inline).toolbar { Button(L("关闭")) { details = false } }
             }
         }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { previewNow = $0 }
@@ -381,7 +382,7 @@ struct RegenerateCardView: View {
                 Section(L("你的要求（选填）")) { TextField(L("生成要求"), text: $requirements, axis: .vertical).lineLimit(4...8).accessibilityIdentifier("regenerate.requirements") }
                 Section { Text(L("生成任务将在后台执行，请到任务队列审核后确认替换。")) }
                 if let error { Section { Text(localizedMessage(error)).foregroundStyle(.red) } }
-            }.disabled(saving).navigationTitle(L("重新生成卡片"))
+            }.disabled(saving).navigationTitle(L("重新生成卡片")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L("取消")) { dismiss() }.disabled(saving) }
                 ToolbarItem(placement: .confirmationAction) { Button(L("提交任务")) {

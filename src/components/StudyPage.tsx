@@ -1,5 +1,5 @@
 import { DEFAULT_SCHEDULER, retrievability } from '../lib/fsrs'
-import { scopeLabel } from './TagSelector'
+import { ScopeSummary } from './TagSelector'
 import { useShortcuts } from '../hooks/useShortcuts'
 import { shortcutAction } from '../lib/shortcuts'
 import { localizedMessage, t } from '../lib/i18n'
@@ -8,16 +8,18 @@ import { localizedMessage, t } from '../lib/i18n'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useReviewQueue } from '../hooks/useReviewQueue'
 import { RegenerateCardDialog } from './RegenerateCardDialog'
-import type { Card } from '../types'
+import type { Card, Deck } from '../types'
 import { CardView } from './CardView'
 import { ReviewButtons } from './ReviewButtons'
 import { useCardEditor } from './CardEditor'
 import { addDays, todayKey } from '../lib/date'
 import { GRADE_BY_BUTTON, intervalLabel } from '../lib/sm2'
-import { loadReviewHistory } from '../lib/storage'
+import { loadReviewHistory, loadDecks } from '../lib/storage'
 import type { ReviewRecord, ReviewButton, StudyScope } from '../types'
 
-export function StudyPage({ onExit, active = true, onSessionChange, scope = null, ahead = 0, deckId = null, exitLabel = '返回我的卡片' }: { deckId?: string | null; ahead?: number; scope?: StudyScope; exitLabel?: string; onExit: () => void; active?: boolean; onSessionChange?: (pending: boolean) => void }) {
+export function StudyPage({ onExit, active = true, onSessionChange, scope = null, ahead = 0, deckId = null, deckLabel, exitLabel = '返回我的卡片' }: { deckLabel?: string; deckId?: string | null; ahead?: number; scope?: StudyScope; exitLabel?: string; onExit: () => void; active?: boolean; onSessionChange?: (pending: boolean) => void }) {
+  const [scopeDecks, setScopeDecks] = useState<Deck[]>([])
+  useEffect(() => { let disposed = false; void loadDecks().then(value => { if (!disposed) setScopeDecks(value) }).catch(() => {}); return () => { disposed = true } }, [])
   const openEditor = useCardEditor()
   const shortcuts = useShortcuts()
   const menu = useRef<HTMLDivElement>(null)
@@ -107,12 +109,13 @@ export function StudyPage({ onExit, active = true, onSessionChange, scope = null
 
   return (
     <section className="study-shell">
-      <header className="study-header">
+      {deckLabel && <p className="deck-study-label">{deckLabel}</p>}
+      <header className="study-header" data-tauri-drag-region>
         <button className="study-quiet" onClick={onExit} disabled={queue.saving}>{`‹ ${t('返回')}`}</button>
         <div className="study-progress">
           {queue.ready && <>
             <progress aria-label={t("学习进度")} value={queue.done} max={Math.max(1, queue.total)} />
-            <span>{queue.done} / {queue.total}</span>
+            <span>{t('已完成 {0} · 剩余 {1}', queue.done, queue.remaining)}</span>
           </>}
         </div>
         <div className="study-more" ref={menu} hidden={!queue.ready}>
@@ -123,7 +126,7 @@ export function StudyPage({ onExit, active = true, onSessionChange, scope = null
               <button disabled={queue.saving} onClick={() => void queue.control({buriedUntil:addDays(todayKey(),1)})}>{t('今天跳过')}</button>
               <button disabled={queue.saving} onClick={() => void queue.control({suspended:true})}>{t('暂停这张卡')}</button>
               <button disabled={queue.saving} onClick={() => void queue.control({marked:!queue.data.controls[queue.current!.id]?.marked})}>{queue.data.controls[queue.current.id]?.marked ? t('取消标记') : t('标记卡片')}</button>
-              <button disabled={queue.saving} onClick={() => openEditor({ kind: 'card', id: queue.current!.id })}>{t('编辑内容')}</button>
+              <button disabled={queue.saving} onClick={() => openEditor({ kind: 'card', id: queue.current!.id, card: queue.current! })}>{t('编辑内容')}</button>
               <button disabled={queue.saving || !!queue.current.anki} title={queue.current.anki ? t('Anki 模板卡暂不支持重新生成，请使用编辑 Anki 笔记') : undefined} onClick={() => {setRegenerated(false);setRegenerating(structuredClone(queue.current!))}}>{t('重新生成')}</button>
               {queue.current.anki && <p className="regenerate-note">{t('Anki 模板卡暂不支持重新生成，请使用编辑 Anki 笔记')}</p>}
               <button onClick={() => setDetails(true)}>{t('学习详情')}</button>
@@ -133,7 +136,7 @@ export function StudyPage({ onExit, active = true, onSessionChange, scope = null
       </header>
       <div className={`study-scroll${!queue.ready ? ' is-preparing' : ''}`} ref={scroll}>
         <div className="study-content">
-          <p className="section-copy study-scope-label">{t("学习范围：{0}", scopeLabel(scope))}</p>
+          <div className="section-copy study-scope-label">{deckLabel ?? <ScopeSummary scope={scope} decks={scopeDecks} />}</div>
           {queue.error && queue.current && <div role="alert" className="study-error"><p>{localizedMessage(queue.error)}</p><button className="study-quiet" onClick={()=>void queue.refresh().catch(()=>{})}>{t('重新检查')}</button></div>}
           {!queue.ready ? <div className="study-loading" role="status" aria-live="polite" aria-busy="true">
             <div className="study-loading-art" aria-hidden="true">

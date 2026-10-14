@@ -29,11 +29,21 @@ import CoreData
             try await bridge.execute(JSONSerialization.data(withJSONObject: ["command": command, "args": args]))
         }
         _ = try await call("status")
+        let initialTags = try await call("libraryTags") as! [String]
+        precondition(initialTags.isEmpty)
+        _ = try await call("saveLibraryTags", ["tags": ["empty-tag"]])
+        let restoredTags = try await CloudBridge(directory: root).execute(JSONSerialization.data(withJSONObject: ["command": "libraryTags"])) as! [String]
+        precondition(restoredTags == ["empty-tag"])
+        _ = try await call("saveLibraryTags", ["tags": [String]()])
         var library = Library(events: try await bridge.persistence.load())
         precondition(library.cards.count == 1 && library.cards[0].createdAt == 12345)
         precondition(library.progress["legacy"]?.lastReviewedAt == 123456789)
         precondition(library.stats["2026-10-01"]?.reviewed == 42 && library.stats["2026-10-01"]?.added == 17)
         precondition(library.newCardsPerDay == 23 && library.llm.apiKey == "fixture-only")
+        let oneCard = try await call("card", ["id": "legacy"]) as! [String: Any]
+        precondition(oneCard["id"] as? String == "legacy" && oneCard["front"] as? String == "old")
+        let missingCard = try await call("card", ["id": "missing"])
+        precondition(missingCard is NSNull)
         let firstCount = try await bridge.persistence.load().count
         _ = try await call("status")
         let nextCount = try await bridge.persistence.load().count
@@ -110,13 +120,32 @@ import CoreData
         _ = try await call("saveSettings", ["limit": 37, "studyScope": ["work", "", "work"]])
         let scoped = CloudBridge(directory: root)
         let scopedSettings = try await scoped.execute(JSONSerialization.data(withJSONObject: ["command": "settings"])) as! [String: Any]
-        precondition(scopedSettings["studyScope"] as? [String] == ["", "work"])
+        let returnedScope = try JSONDecoder().decode(StudyScope.self, from: JSONSerialization.data(withJSONObject: scopedSettings["studyScope"]!))
+        precondition(returnedScope.tags == ["", "work"])
         _ = try await call("saveSettings", ["limit": 36])
         let preservedScope = Library(events: try await bridge.persistence.load()).studyScope.tags
         precondition(preservedScope == ["", "work"])
         _ = try await call("saveSettings", ["limit": 37, "studyScope": NSNull()])
         let allScope = Library(events: try await bridge.persistence.load()).studyScope.tags
         precondition(allScope == nil)
+        _ = try await call("saveSettings", ["limit": 37, "studyScope": NSNull(), "studyDeckId": "default"])
+        let deckSettings = try await CloudBridge(directory: root).execute(JSONSerialization.data(withJSONObject: ["command": "settings"])) as! [String: Any]
+        let returnedDeckScope = try JSONDecoder().decode(StudyScope.self, from: JSONSerialization.data(withJSONObject: deckSettings["studyScope"]!))
+        precondition(returnedDeckScope.deckId == "default")
+        _ = try await call("saveSettings", ["limit": 36])
+        let preservedDeck = Library(events: try await bridge.persistence.load()).studyScope.deckId
+        precondition(preservedDeck == "default")
+        _ = try await call("saveSettings", ["limit": 37, "studyScope": NSNull(), "studyDeckId": NSNull()])
+        let clearedDeck = Library(events: try await bridge.persistence.load()).studyScope.deckId
+        precondition(clearedDeck == nil)
+        let composite = StudyScope(rules: [StudyScopeRule(deckIds: ["default"], tags: ["work"]), StudyScopeRule(deckIds: nil, tags: [""])])
+        let compositeJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(composite))
+        _ = try await call("saveSettings", ["limit": 37, "studyScope": compositeJSON, "studyDeckId": NSNull()])
+        let compositeSettings = try await CloudBridge(directory: root).execute(JSONSerialization.data(withJSONObject: ["command": "settings"])) as! [String: Any]
+        let restoredComposite = try JSONDecoder().decode(StudyScope.self, from: JSONSerialization.data(withJSONObject: compositeSettings["studyScope"]!))
+        precondition(restoredComposite == composite)
+        _ = try await call("saveSettings", ["limit": 37, "studyScope": NSNull()])
+
         let beforeInvalid = try await bridge.persistence.load().count
         do {
             _ = try await call("savePreferences", ["limit": 101, "enabled": false,
@@ -220,10 +249,17 @@ import CoreData
         precondition(storedJobs[0]["id"] as? String == "draft-test")
         let afterDraft = try await bridge.persistence.load().count
         precondition(priorEvents == afterDraft, "Drafts must not enter sync events")
-        let taskState: [String: Any] = ["version": 1, "tasks": [["id": "ai-test", "drafts": [], "status": "paused"]]]
+        let taskState: [String: Any] = ["version": 1, "tasks": [["id": "ai-test", "targetDeckId": "default", "drafts": [], "status": "paused"]]]
         _ = try await call("saveAITasks", ["state": taskState])
         let persistedTasks = try await call("aiTasks") as! [String: Any]
         precondition((persistedTasks["tasks"] as! [[String: Any]])[0]["id"] as? String == "ai-test")
+        precondition((persistedTasks["tasks"] as! [[String: Any]])[0]["targetDeckId"] as? String == "default")
+        let patchedTask: [String: Any] = ["id": "ai-test", "targetDeckId": "default", "drafts": [], "status": "done"]
+        _ = try await call("patchAITasks", ["tasks": [patchedTask], "order": ["ai-test"], "migratedImports": true])
+        _ = try await call("patchAITasks", ["tasks": [], "order": ["ai-test"], "migratedImports": true])
+        let patchedState = try await call("aiTasks") as! [String: Any]
+        precondition((patchedState["tasks"] as! [[String: Any]])[0]["status"] as? String == "done")
+        precondition(patchedState["migratedImports"] as? Bool == true)
         let afterTaskSave = try await bridge.persistence.load().count
         precondition(afterTaskSave == afterDraft, "AI queue must stay outside synchronized events")
         let aiCard: [String: Any] = ["id": "custom:ai:bridge", "front": "AI question", "back": "AI answer", "noteId": "ai-pair", "tags": ["reviewed"]]

@@ -49,7 +49,8 @@
 .document-writing .editor > * { min-width: 0; max-width: 100%; }
 .document-writing span[data-type="html"] { white-space: pre-wrap; overflow-wrap: anywhere; }
 .document-source { white-space: pre-wrap; overflow-wrap: anywhere; }
-.card-editor-fields .document-writing { min-height: 225px; max-height: 440px; overflow: auto; }
+/* Let rich text fill the stretched editor; the page owns vertical scrolling. */
+.card-editor-fields .document-writing { min-height: 225px; }
 .card-editor-fields .document-source { min-height: 270px; max-height: 440px; }
 .editor-audio { display: inline-flex; flex-direction: column; width: 100%; max-width: 100%; min-width: 0; padding: 12px; margin: 12px 0; border: 1px solid var(--ui-line); background: var(--ui-soft); border-radius: 10px; white-space: normal; vertical-align: middle; }
 .editor-audio-title { font: 600 12px/1.5 -apple-system,BlinkMacSystemFont,sans-serif; color: var(--ui-text); margin-bottom: 10px; }

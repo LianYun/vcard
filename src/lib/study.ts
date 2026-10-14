@@ -1,9 +1,21 @@
+import { isRecentForgottenReview } from './forgotten'
 import type { Card, CardControl, ProgressMap, ReviewRecord, StudyFilter, StudyData, Settings, StudyScope, Deck } from '../types'
 import { selectFresh } from './decks'
 import { addDays, todayKey } from './date'
 import { matchesStudyScope } from './tags'
 import type { Meta } from './storage'
 import { isDue, isNew } from './sm2'
+
+/** Keep the displayed card until an explicit action; due learning is next. */
+export function currentStudyCard(queue: Card[], progress: ProgressMap, currentId: string | null, now: number): Card | null {
+  const current = queue.find(card => card.id === currentId)
+  if (current) return current
+  const learning = queue.filter(card => {
+    const due = progress[card.id]?.learningDue
+    return due != null && due <= now
+  }).sort((a, b) => progress[a.id].learningDue! - progress[b.id].learningDue!)
+  return learning[0] ?? queue.find(card => progress[card.id]?.learningDue == null) ?? null
+}
 
 /** Randomize once per session, spacing sibling cards when the pool allows it. */
 export function shuffleStudyCards(cards: Card[], random = Math.random): Card[] {
@@ -45,7 +57,7 @@ export function matchesStudy(card: Card, filter: StudyFilter, progress: Progress
     case 'new': return isNew(progress[card.id])
     case 'suspended': return !!controls[card.id]?.suspended
     case 'marked': return !!controls[card.id]?.marked
-    case 'forgotten': return reviews.some(r => r.cardId === card.id && !r.undone && r.quality < 3 && r.day >= addDays(day, -6))
+    case 'forgotten': return reviews.some(r => r.cardId === card.id && isRecentForgottenReview(r, day))
     case 'recent': return card.createdAt != null && todayKey(new Date(card.createdAt * 1000)) >= addDays(day, -6)
     default: return true
   }
@@ -67,7 +79,7 @@ export const FILTERS: { value: StudyFilter; label: string }[] = [
 
 /** Read-only selection shared by preview and session creation. */
 export function selectStudyCards(all: Card[], data: StudyData, settings: Settings, meta: Meta, scope: StudyScope, decks: Deck[] = []) {
-  const matching = all.filter(card => matchesStudyScope(card, scope))
+  const matching = all.filter(card => matchesStudyScope(card, scope, decks))
   const cards = matching.filter(card => available(data.controls[card.id]))
   const budget = Math.max(0, settings.newCardsPerDay - (meta.newCardsDate === todayKey() ? meta.newCardsIssued : 0))
   const groups = new Set<string>()

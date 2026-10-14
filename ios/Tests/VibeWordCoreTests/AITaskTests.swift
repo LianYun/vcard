@@ -2,6 +2,21 @@ import XCTest
 @testable import VibeWordCore
 
 final class AITaskTests: XCTestCase {
+    func testTargetDeckCompatibilityAndMissingDeckConfirmation() throws {
+        var task = AITask(word: "word"); task.targetDeckId = "topic"
+        let data = try JSONEncoder().encode(task)
+        XCTAssertEqual(try JSONDecoder().decode(AITask.self, from: data).targetDeckId, "topic")
+        var legacy = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        legacy.removeValue(forKey: "targetDeckId")
+        XCTAssertNil(try JSONDecoder().decode(AITask.self, from: JSONSerialization.data(withJSONObject: legacy)).targetDeckId)
+        var card = Card(front: "word", back: "meaning"); card.deckId = "topic"
+        XCTAssertThrowsError(try AIConfirmation.events(existing: [], draftID: "missing", card: card))
+        var deck = SyncEvent(kind: .deck); deck.deck = Deck(id: "topic", name: "Topic")
+        let events = try AIConfirmation.events(existing: [deck], draftID: "present", card: card)
+        XCTAssertEqual(Library(events: [deck] + events).cards.first?.deckId, "topic")
+        card.deckId = "default"
+        XCTAssertNoThrow(try AIConfirmation.events(existing: [], draftID: "reassigned", card: card))
+    }
     func testDraftsRemainLocalAndRecoverPaused() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -1,3 +1,4 @@
+import { AppSelect } from './AppSelect'
 import { useCardEditor } from './CardEditor'
 import { allCards } from '../lib/cardStore'
 import { useShortcuts } from '../hooks/useShortcuts'
@@ -11,7 +12,7 @@ import { FILTERS, matchesStudy, shuffleStudyCards } from '../lib/study'
 import { CardView } from './CardView'
 
 // This session only holds cards and presentation state; it never issues or grades cards.
-export function BrowsePage({ cards, onExit }: { cards: Card[]; onExit: () => void }) {
+export function BrowsePage({ cards, onExit, focused = false }: { cards: Card[]; onExit: () => void; focused?: boolean }) {
   const openEditor = useCardEditor()
   const shortcuts = useShortcuts()
   const [filter,setFilter]=useState<StudyFilter>('all')
@@ -21,7 +22,7 @@ export function BrowsePage({ cards, onExit }: { cards: Card[]; onExit: () => voi
   useEffect(()=>{loadStudyData().then(setData).catch(e=>setError(String(e)))},[])
   const [all, setAll] = useState(true)
   const [selected, setSelected] = useState<string[]>([])
-  const [session, setSession] = useState<Card[] | null>(null)
+  const [session, setSession] = useState<Card[] | null>(() => focused ? [...cards] : null)
   useEffect(() => {
     let live = true
     const refresh = () => { void allCards().then(latest => { if (live) setSession(previous => previous?.flatMap(card => { const updated = latest.find(c => c.id === card.id); return updated ? [updated] : [] }) ?? null) }).catch(e => { if (live) setError(String(e)) }) }
@@ -52,13 +53,12 @@ export function BrowsePage({ cards, onExit }: { cards: Card[]; onExit: () => voi
     return () => window.removeEventListener('keydown', keydown)
   }, [session, index, shortcuts])
   return <section className="browse-page">
-    <header className="browse-header"><div className="browse-header-inner">
-      <button className="btn-secondary" onClick={onExit}>{t('返回我的卡片')}</button>
-      {session && <button className="btn-secondary" onClick={() => { setSession(null); setFlipped(false) }}>{t('重新选择标签')}</button>}
+    <header className="browse-header" data-tauri-drag-region><div className="browse-header-inner">
+      <button className="btn-secondary" onClick={onExit}>{t('返回我的卡片')}</button><h1 className="focus-page-title">{t(focused ? '最近反复忘记的卡片' : '快速学习')}</h1>
+      {session && !focused && <button className="btn-secondary" onClick={() => { setSession(null); setFlipped(false) }}>{t('重新选择标签')}</button>}
     </div></header>
     <div className="browse-content">
       <div className="browse-intro">
-        <h1 className="text-2xl font-semibold tracking-tight">{t('快速学习')}</h1>
         <p className="text-sm text-slate-500">{t('不记录掌握程度，不影响学习进度和每日额度')}</p>
       </div>
       {!session ? <div className="app-surface browse-setup">
@@ -66,9 +66,7 @@ export function BrowsePage({ cards, onExit }: { cards: Card[]; onExit: () => voi
         <div className="browse-settings">
           <label className="browse-setting">
             <span>{t('专项范围')}</span>
-            <select className="app-field browse-select" value={filter} onChange={event => setFilter(event.target.value as StudyFilter)}>
-              {FILTERS.filter(item => item.value !== 'suspended').map(item => <option key={item.value} value={item.value}>{t(item.label)}</option>)}
-            </select>
+            <AppSelect label={t('专项范围')} value={filter} onChange={setFilter} options={FILTERS.filter(item => item.value !== 'suspended').map(item => ({ value: item.value, label: t(item.label) }))} />
           </label>
           <fieldset className="browse-setting">
             <legend>{t('每轮数量')}</legend>
@@ -102,11 +100,11 @@ export function BrowsePage({ cards, onExit }: { cards: Card[]; onExit: () => voi
           </button>
         </div>
       </div> : <>
-        {current && <><button className="btn-secondary mb-3" onClick={() => openEditor({ kind: 'card', id: current.id })}>{t('编辑内容')}</button><CardView key={current.id} card={current} flipped={flipped} onFlipChange={setFlipped} /></>}
+        {current && <><button className="btn-secondary mb-3" onClick={() => openEditor({ kind: 'card', id: current.id, card: current })}>{t('编辑内容')}</button><CardView key={current.id} card={current} flipped={flipped} onFlipChange={setFlipped} /></>}
         <div className="mt-5 flex items-center justify-between gap-3">
           <button className="btn-secondary" disabled={index === 0} onClick={() => move(index - 1)}>{t('上一张')}</button>
-          <span role="status">{index + 1} / {session.length}</span>
-          <button className="btn-secondary" disabled={index >= session.length - 1} onClick={() => move(index + 1)}>{t('下一张')}</button>
+          <span role="status">{session.length ? index + 1 : 0} / {session.length}</span>
+          {focused && index >= session.length - 1 ? <button className="btn-primary" onClick={onExit}>{t('完成本轮')}</button> : <button className="btn-secondary" disabled={index >= session.length - 1} onClick={() => move(index + 1)}>{t('下一张')}</button>}
         </div>
       </>}
     </div>

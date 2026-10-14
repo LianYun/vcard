@@ -38,7 +38,7 @@ struct ReviewHomeView: View {
                     }.buttonStyle(.borderedProminent)
                         .accessibilityIdentifier("cards.startStudy")
                     HStack(alignment: .firstTextBaseline) {
-                        Text(L("学习范围：{0}", store.queue.isEmpty ? store.library.studyScope.label : store.sessionScope.label))
+                        StudyScopeSummaryView(scope: store.queue.isEmpty ? store.library.studyScope : store.sessionScope, decks: store.library.decks)
                             .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("cards.studyScope")
                         Spacer()
                         Button(L("更改")) { scope = true }.accessibilityIdentifier("review.scope")

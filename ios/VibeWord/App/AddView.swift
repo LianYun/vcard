@@ -3,6 +3,8 @@ import SwiftUI
 struct AddView: View {
     @AppStorage(AppLanguage.key, store: AppLanguage.defaults) private var interfaceLanguage = "system"
     @EnvironmentObject private var store: AppStore
+    var initialDeckID = "default"
+    @State private var targetDeckID = "default"
     let jump: (String) -> Void
     var onSettings: () -> Void = {}
     @State private var front = ""
@@ -14,6 +16,7 @@ struct AddView: View {
         // Register the preference read so existing screens refresh without losing view state.
         let _ = interfaceLanguage
         Form {
+            Section { DeckPicker(selection: $targetDeckID) }
             Section { Button(L("创建卡片"), systemImage: "plus.rectangle") { creating = true } }
             Section(L("AI 添加")) {
                 TextField(L("单词 / 正面"), text: $front, axis: .vertical).textInputAutocapitalization(.never)
@@ -23,7 +26,7 @@ struct AddView: View {
                     submitting = true
                     Task {
                         defer { submitting = false }
-                        do { try await store.enqueue(word); feedback = L("已加入任务队列"); clear() }
+                        do { try await store.enqueue(word, targetDeckId: targetDeckID); feedback = L("已加入任务队列"); clear() }
                         catch { store.error = error.localizedDescription }
                     }
                 }.disabled(submitting || word.isEmpty || !store.library.llm.isConfigured)
@@ -36,11 +39,13 @@ struct AddView: View {
             }
             Section { NavigationLink(L("查看任务队列")) { TaskQueueView() } }
             Section { Text(L("切换页面后会继续生成。iOS 在应用进入后台后可能暂停网络任务；再次打开可继续或重试。")).font(.caption).foregroundStyle(.secondary) }
-        }.navigationTitle(L("添加卡片"))
-        .sheet(isPresented: $creating) { EditCardView(card: Card(front: "", back: ""), creating: true) }
+        }.navigationTitle(L("添加卡片")).navigationBarTitleDisplayMode(.inline)
+        .onAppear { targetDeckID = initialDeckID }
+        .sheet(isPresented: $creating) { EditCardView(card: newCard, creating: true) }
         .modifier(KeyboardDoneModifier())
 
     }
+    private var newCard: Card { var card = Card(front: "", back: ""); card.deckId = targetDeckID; return card }
     private func clear() { finishTextInput(); front = "" }
 }
 
@@ -76,9 +81,7 @@ struct EditCardView: View {
             Form {
                 Section {
                     Text(L(card.anki == nil ? "问答卡" : "Anki 模板卡"))
-                    Picker(L("牌组"), selection: Binding(get: { card.deckId ?? "default" }, set: { card.deckId = $0 })) {
-                        ForEach(store.library.decks) { deck in Text(store.library.deckPath(deck.id)).tag(deck.id) }
-                    }
+                    DeckPicker(selection: Binding(get: { card.deckId ?? "default" }, set: { card.deckId = $0 }))
                     TextField(L("标签（用逗号分隔，清空可移除）"), text: $tagsText).accessibilityIdentifier("edit.tags")
                     Picker(L("编辑模式"), selection: $preview) { Text(L("编辑")).tag(false); Text(L("卡片预览")).tag(true) }.pickerStyle(.segmented)
                 }
@@ -109,7 +112,7 @@ struct EditCardView: View {
                 if let editError { Section { Text(localizedMessage(editError)).foregroundStyle(.red) } }
             }
             .disabled(saving)
-            .navigationTitle(L(creating ? "创建卡片" : "编辑卡片"))
+            .navigationTitle(L(creating ? "创建卡片" : "编辑卡片")).navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 guard original == nil else { return }
                 if !creating {

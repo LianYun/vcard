@@ -76,6 +76,17 @@ body { -webkit-font-smoothing:antialiased; }
 }
 
 /* Size filters against the available content column, not the window width. */
+.deck-library-tools { display:flex;align-items:center;gap:8px; }
+.library-controls { container-type:inline-size; }
+.mac-app .library-filters-with-deck { grid-template-columns:minmax(180px,1.5fr) repeat(3,minmax(0,1fr)); }
+@container (max-width:760px) {
+  .mac-app .library-filters-with-deck { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .library-filters-with-deck .library-search { grid-column:1/-1; }
+}
+@container (max-width:420px) {
+  .mac-app .library-filters-with-deck { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .library-filters-with-deck .library-filter:first-of-type { grid-column:1/-1; }
+}
 .mac-app .deck-library-content { container-type:inline-size; }
 .mac-app .library-filter,.mac-app .library-search input { min-width:0;max-width:100%; }
 @container (max-width:600px) {
@@ -119,3 +130,173 @@ body { -webkit-font-smoothing:antialiased; }
 @media(max-width:760px) {
   .mac-app:not(.mac-native-window) .mac-sidebar-resizer { display:none; }
 }
+
+/* Constrain queue scrolling to the two panels, including the native titlebar. */
+.mac-app.mac-task-workspace { height:100dvh; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+.mac-task-workspace .mac-sidebar { flex-shrink:0; }
+.mac-main.mac-task-main { flex:1; min-height:0; display:flex; flex-direction:column; padding-bottom:24px; }
+.mac-task-main > .status-error { max-height:80px; overflow:auto; flex-shrink:0; }
+@media(max-width:700px) { .mac-main.mac-task-main { padding:12px 12px max(12px,env(safe-area-inset-bottom)); } }
+
+/* The calendar is a flat page; keep its title below native window controls. */
+.mac-app .calendar-insights {
+  padding:28px 0 0;
+  background:transparent;
+  border-top:1px solid var(--ui-line);
+  border-radius:0;
+}
+
+/* Workspace density: the titlebar is useful space, not an extra blank row. */
+.mac-app { --workspace-toolbar-height:52px; }
+.mac-main { padding:0 24px 32px; }
+.mac-native-window:not(.workspace-focus) { padding-top:0; }
+.mac-native-window .mac-main { padding-top:0; }
+.mac-native-window:not(.workspace-focus) .mac-window-drag-region { width:calc(var(--sidebar-width) + 20px); }
+.workspace-toolbar { position:sticky;top:0;z-index:35;display:flex;align-items:center;gap:16px;min-height:var(--workspace-toolbar-height);margin:0 -24px 16px;padding:6px 24px;background:var(--ui-bg);border-bottom:1px solid var(--ui-line); }
+.workspace-toolbar h1 { flex-shrink:0;font-size:16px;font-weight:650;letter-spacing:-.3px; }
+.workspace-toolbar-controls { display:flex;justify-content:flex-end;align-items:center;flex:1;min-width:0; }
+.workspace-toolbar-tabs .workspace-toolbar-controls { justify-content:flex-start; }
+.workspace-toolbar .add-tabs { border:0;gap:24px;max-width:100%; }
+.workspace-toolbar .add-tab { min-height:40px;padding:8px 2px; }
+.workspace-toolbar .calendar-toolbar { gap:12px;margin:0;width:100%; }
+.workspace-toolbar .calendar-toolbar h2 { font-size:22px;white-space:nowrap; }
+.workspace-toolbar .calendar-toolbar button { min-height:44px;min-width:44px;padding:6px 10px; }
+.workspace-toolbar .settings-savebar { position:static;border:0;padding:0;gap:12px; }
+.workspace-toolbar .settings-save-status { flex:initial; }
+.mac-main>.settings-panel { gap:20px; }
+.mac-sidebar { padding-top:16px; }
+.mac-native-window .mac-sidebar { padding-top:52px; }
+.mac-main .mac-stats { padding-bottom:16px; }
+.mac-main .mac-stats .app-surface { display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:0 20px; }
+.mac-main .mac-stats .app-surface:first-child { padding-left:0; }
+.mac-main .mac-stats .text-2xl { font-size:26px; }
+.mac-main .study-hub { padding:20px; }
+.mac-main .study-hub-nav { gap:16px; }
+.mac-main .study-hub>.study-hub-actions { margin-top:16px;padding-top:12px;gap:8px; }
+.mac-main .study-hub-actions button { min-height:36px; }
+.mac-main .calendar-summary { gap:12px 28px;padding:0 0 16px;margin-bottom:16px; }
+.mac-main .calendar-summary strong { font-size:20px; }
+.mac-main .calendar-detail h3 { margin-bottom:16px; }
+.mac-main .calendar-detail-count { margin:14px 0; }
+.mac-main .calendar-insights { margin-top:24px;padding-top:20px; }
+.mac-main .library-browser { padding:0; }
+.mac-main .library-browser .library-toolbar { margin:4px 0 12px;padding-bottom:4px; }
+.mac-task-main .workspace-toolbar { flex-shrink:0; }
+.mac-main.mac-task-main { padding-bottom:16px; }
+.mac-app .task-list-header { padding:12px 14px; }
+.mac-app .task-list-header .task-filters { margin:10px 0; }
+.mac-app .task-detail-header { padding:14px 20px 12px; }
+.mac-app .task-detail-header-tabs { padding-bottom:0; }
+.mac-app .task-detail-eyebrow { margin-bottom:4px; }
+.mac-app .task-direction-tabs { margin-top:8px; }
+.mac-app .task-direction-tab { min-height:40px; }
+.mac-app .task-detail-body { padding:20px; }
+.mac-app .task-review-footer { padding:12px 20px; }
+.add-workspace>.deck-picker,.card-editor-inline .deck-picker { max-width:520px; }
+.add-workspace .deck-picker-select,.card-editor-inline .deck-picker-select { display:flex;align-items:center;gap:10px;min-width:0; }
+.add-workspace .deck-picker-select>span,.card-editor-inline .deck-picker-select>span { margin:0;white-space:nowrap; }
+.add-workspace .deck-picker-select>.app-select,.card-editor-inline .deck-picker-select>.app-select { flex:1;min-width:0; }
+.card-editor-inline { min-width:0; }
+.card-editor-inline .card-editor-header { position:static;padding:0 0 12px;gap:12px; }
+.card-editor-inline .card-editor-header h1 { font-size:15px;flex:1; }
+.card-editor-inline .card-editor-meta { margin:0 0 16px;gap:12px;font-size:12px; }
+.card-editor-inline .card-editor-meta>span { display:none; }
+.card-editor-inline .card-editor-meta>label { display:flex;align-items:center;gap:8px;flex:1;min-width:220px; }
+.card-editor-inline .card-editor-meta>label input { flex:1;min-width:0; }
+.card-editor-inline .card-editor-columns { gap:20px;padding-bottom:10px; }
+.card-editor-inline .card-editor-pair { gap:20px;padding:16px 0; }
+.card-editor-inline .card-editor-fields h2,.card-editor-inline .card-editor-preview h2 { margin-bottom:10px; }
+.card-editor-inline .card-editor-face { padding:16px; }
+.card-editor-inline .card-editor-examples { padding-top:12px; }
+.mac-app .study-header { min-height:52px;padding:4px 20px; }
+.mac-app .study-scroll { padding:16px 20px 24px; }
+.mac-app .browse-header-inner { padding-block:8px; }
+.mac-app .browse-intro { margin-bottom:16px; }
+.mac-app .browse-content { padding-top:16px; }
+.mac-app .tag-study-page { padding-top:12px; }
+.mac-app .tag-study-page>h2 { display:inline;font-size:20px; }
+.mac-app .tag-study-page>button { margin-right:12px; }
+.mac-app .tag-study-page>p { margin-top:8px; }
+body:has(.mac-native-window) .card-editor-page { padding-top:52px; }
+body:has(.mac-native-window) .card-editor-page .card-editor-header { top:-1px; }
+@media(max-width:1100px) {
+  .workspace-toolbar { gap:12px; }
+  .card-editor-inline .card-editor-meta { align-items:stretch; }
+}
+@media(max-width:760px) {
+  .mac-main { padding:0 16px 24px; }
+  .workspace-toolbar { margin-inline:-16px;padding-inline:16px; }
+  .workspace-toolbar h1 { font-size:15px; }
+  .mac-app:not(.mac-native-window) { padding-bottom:calc(72px + env(safe-area-inset-bottom)); }
+  .mac-app:not(.mac-native-window).workspace-focus { padding-bottom:0; }
+  .mac-app:not(.mac-native-window) .mac-sidebar { position:fixed;inset:auto 0 0;margin:0;padding:6px 4px max(6px,env(safe-area-inset-bottom));border-radius:0;border-width:1px 0 0;z-index:50; }
+  .mac-app:not(.mac-native-window) .mac-sidebar nav { display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0; }
+  .mac-app:not(.mac-native-window) .mac-nav-item { position:relative;flex-direction:column;gap:3px;padding:4px 0;min-height:52px;font-size:11px; }
+  .mac-app:not(.mac-native-window) .mac-nav-label { white-space:nowrap; }
+  .mac-app:not(.mac-native-window) .mac-task-status { position:absolute;top:0;right:2px; }
+  .mac-app:not(.mac-native-window) .mac-task-status .task-badge { font-size:10px; }
+  .mac-app:not(.mac-native-window) .mac-main { margin-left:0; }
+  .workspace-toolbar .add-tabs { gap:16px; }
+  .workspace-toolbar .add-tab { min-height:44px; }
+  .workspace-toolbar .calendar-toolbar { gap:6px;flex-wrap:wrap;justify-content:space-between; }
+  .workspace-toolbar .calendar-toolbar button { min-height:44px; }
+  .workspace-toolbar .settings-savebar { flex-wrap:nowrap;gap:8px; }
+  .workspace-toolbar .settings-save-status { font-size:11px; }
+  .workspace-toolbar .settings-savebar>.btn-primary { min-width:80px;min-height:44px; }
+  .mac-main .mac-stats .app-surface { gap:2px 8px;padding-inline:10px; }
+  .mac-main .study-hub { padding:16px; }
+  .mac-main .study-hub-actions button { min-height:44px; }
+  .mac-main .calendar-summary { gap:8px 16px; }
+  .card-editor-inline .card-editor-meta>label { flex-basis:100%;min-width:0;flex-wrap:wrap; }
+  .card-editor-inline .card-editor-meta>label input { min-width:120px; }
+  .card-editor-inline .card-editor-pair { grid-template-columns:minmax(0,1fr);gap:16px; }
+  .card-editor-inline .card-editor-columns { grid-template-columns:1fr; }
+  .card-editor-inline .card-editor-columns>span:last-child { display:none; }
+  .card-editor-inline .deck-picker { width:100%; }
+  .mac-main.mac-task-main { padding:0 16px 12px; }
+}
+@media(max-width:380px) {
+  .workspace-toolbar { gap:6px;padding-inline:12px; }
+  .workspace-toolbar .add-tabs { gap:12px; }
+  .workspace-toolbar .add-tab { font-size:12px; }
+  .workspace-toolbar .calendar-toolbar h2 { font-size:18px; }
+  .workspace-toolbar .calendar-toolbar { gap:4px; }
+  .workspace-toolbar .calendar-toolbar button { padding-inline:6px; }
+}
+/* Focused pages share the same native window safety instead of a second bar. */
+.mac-native-window.workspace-focus { padding-top:0; }
+.mac-native-window.workspace-focus .mac-window-drag-region { width:112px; }
+.mac-native-window .study-shell { height:100dvh; }
+.mac-native-window.workspace-focus .study-header { padding-left:124px; }
+.mac-native-window.workspace-focus .browse-header { padding-left:112px; }
+.scope-toolbar { display:flex;align-items:center;gap:12px;min-height:52px; }
+.scope-toolbar h2 { font-size:20px; }
+.mac-native-window .tag-study-page { padding-top:0; }
+.mac-native-window .scope-toolbar { padding-left:104px; }
+body:has(.mac-native-window) .card-editor-page { padding-top:0; }
+body:has(.mac-native-window) .card-editor-page .card-editor-header { min-height:52px;top:0;padding-left:104px; }
+@media(min-width:761px) {
+  .add-workspace .deck-picker .app-select-trigger,.add-workspace .deck-picker>button.btn-secondary { height:36px;min-height:36px;padding-block:6px; }
+}
+.focus-page-title { font-size:16px;font-weight:600;flex:1; }
+.card-editor-inline .card-editor-front .card-editor-face { min-height:180px; }
+.card-editor-inline .card-editor-meta .deck-picker-select { min-width:0; }
+.card-editor-inline .document-writing { padding:10px 18px 16px; }
+.card-editor-inline .document-writing .editor { min-height:76px; }
+.card-editor-inline .document-source,.card-editor-inline .document-preview { min-height:160px; }
+@media(max-width:760px) {
+  .card-editor-inline .card-editor-preview { display:none; }
+  .card-editor-inline .card-editor-pair::after { display:none; }
+  .card-editor-inline .card-editor-meta .deck-picker-select { min-width:0; }
+  .card-editor-inline .card-editor-front .document-editor { min-height:0; }
+  .card-editor-inline .card-editor-meta { gap:8px; }
+}
+.card-editor-inline .card-editor-fields .document-writing { min-height:112px; }
+.card-editor-inline .card-editor-fields .document-source { min-height:180px; }
+@media(max-width:760px) {
+  .card-editor-inline .card-editor-meta .deck-picker { flex-wrap:nowrap; }
+  .card-editor-inline .card-editor-meta .deck-picker-select { flex:1 1 0; }
+  .card-editor-inline .card-editor-meta .deck-picker>button { padding-inline:10px; }
+}
+.add-workspace .import-drop { padding:24px;gap:12px; }
+.workspace-toolbar .settings-savebar>.btn-primary:disabled { background:var(--ui-soft);color:var(--ui-muted);border:1px solid var(--ui-line);opacity:1;box-shadow:none;filter:none; }

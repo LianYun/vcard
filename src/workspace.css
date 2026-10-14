@@ -1,0 +1,103 @@
+/* Application chrome. Page components retain their existing controls and state. */
+.workspace-shell {
+  --ui-bg:#f5f5f7; --ui-surface:#fff; --ui-soft:#eeeef2; --ui-line:#dedee5;
+  --ui-text:#242429; --ui-muted:#7c7c89; --ui-tint:#eeebff; --ui-accent:#5546ed;
+  --brand-50:238 235 255; --brand-100:224 219 255; --brand-500:105 89 245;
+  --brand-600:85 70 237; --brand-700:70 54 211;
+  --mac-sidebar:var(--ui-bg); --mac-selection:var(--ui-surface);
+  --workspace-footer-height:calc(34px + env(safe-area-inset-bottom));
+  position:relative;height:100dvh;min-height:0;padding:0!important;overflow:hidden;
+}
+:root[data-theme="dark"] .workspace-shell {
+  --ui-bg:#222226; --ui-surface:#2c2c32; --ui-soft:#33333b; --ui-line:#41414b;
+  --ui-text:#f3f3f6; --ui-muted:#aaaab8; --ui-tint:#38334f; --ui-accent:#b2a7ff;
+  --brand-50:56 51 79; --brand-100:66 58 96;
+}
+.workspace-shell .mac-sidebar {
+  inset:0 auto 0 0!important;margin:0!important;width:var(--sidebar-width)!important;
+  padding:0 12px 16px!important;border:0;border-right:1px solid var(--ui-line);border-radius:0;
+  background:var(--ui-bg);backdrop-filter:none;z-index:40;
+}
+.workspace-sidebar-brand { display:flex;align-items:center;justify-content:space-between;min-height:72px;padding:12px 8px;flex-shrink:0; }
+.workspace-brand { display:block;width:32px;height:32px;object-fit:contain;flex:none; }
+.workspace-shell .mac-sidebar .workspace-side-nav { display:flex;flex-direction:column;gap:4px;overflow-y:auto; }
+.workspace-nav-group { font-size:11px;font-weight:600;color:var(--ui-muted);padding:22px 12px 8px;letter-spacing:.5px; }
+.workspace-shell .mac-nav-item { flex-direction:row;justify-content:flex-start;position:static;gap:10px;min-height:44px;padding:9px 12px;font-size:14px;border:1px solid transparent;border-radius:10px; }
+.workspace-shell .mac-nav-item svg { width:19px;height:19px;color:var(--ui-muted); }
+.workspace-shell .mac-nav-item[aria-current="page"] { color:var(--ui-text);background:var(--ui-surface);border-color:var(--ui-line);box-shadow:0 1px 2px #0000000a; }
+.workspace-shell .mac-nav-item[aria-current="page"] svg { color:var(--ui-text); }
+.workspace-shell .mac-task-status { position:static!important; }
+.workspace-settings-link { margin-top:auto;padding-top:20px; }
+.workspace-shell .mac-main {
+  position:absolute;inset:0 0 var(--workspace-footer-height) var(--sidebar-width);margin:0!important;
+  padding:0 28px 28px;min-width:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;
+}
+.workspace-shell.workspace-compact .mac-main { left:0; }
+.workspace-shell .workspace-toolbar {
+  display:grid;grid-template-columns:36px minmax(0,1fr);gap:0 14px;
+  min-height:64px;margin:0 -28px 24px;padding:10px 28px;background:var(--ui-bg);z-index:35;
+}
+.workspace-topline { display:flex;align-items:center;gap:14px;min-width:0; }
+.workspace-icon-button { display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;flex:none;border-radius:8px;color:var(--ui-muted);font-size:22px; }
+.workspace-icon-button svg { width:21px;height:21px; }
+.workspace-icon-button:hover { background:var(--ui-soft);color:var(--ui-text); }
+.workspace-icon-button:focus-visible,.workspace-location button:focus-visible { outline:2px solid var(--ui-accent);outline-offset:2px; }
+.workspace-location { align-self:center;min-width:0;overflow:auto;scrollbar-width:thin; }
+.workspace-location nav { display:flex;align-items:center;gap:10px;min-height:40px;width:max-content;max-width:none;font-size:14px;color:var(--ui-muted); }
+.workspace-location h1 { font-size:14px; }
+.workspace-location button { white-space:nowrap;border-radius:4px;min-height:36px; }
+.workspace-location button:hover { color:var(--ui-text); }
+.workspace-location [aria-current="page"] { color:var(--ui-text);font-weight:600; }
+.workspace-crumb { display:inline-flex;gap:10px;align-items:center; }
+.workspace-location:has(.workspace-page-location:not(:empty)) .workspace-root-location { display:none; }
+.workspace-shell .workspace-toolbar-controls { grid-column:1/-1;justify-content:flex-start;min-width:0; }
+.workspace-toolbar-controls:empty { display:none; }
+.workspace-shell .workspace-toolbar-controls:not(:empty) { padding-top:8px;margin-top:6px;border-top:1px solid var(--ui-line); }
+.workspace-shell .workspace-toolbar .add-tabs { gap:6px;overflow-x:auto; }
+.workspace-shell .workspace-toolbar .add-tab { min-height:38px;padding:7px 14px;border:1px solid transparent;border-radius:8px;white-space:nowrap; }
+.workspace-shell .workspace-toolbar .add-tab[aria-selected="true"] { background:var(--ui-surface);color:var(--ui-text);border-color:var(--ui-line);box-shadow:0 1px 2px #0000000a; }
+.workspace-shell.workspace-compact .workspace-topline { grid-column:1/-1; }
+.workspace-compact .workspace-location { grid-column:1/-1;margin-top:6px; }
+.workspace-top-nav { display:flex;align-items:center;gap:4px;min-width:0;flex:1;margin-left:12px;overflow-x:auto;scrollbar-width:thin; }
+.workspace-top-nav>div { flex:none; }
+.workspace-top-nav .workspace-settings-link { margin:0;padding:0; }
+.workspace-shell .workspace-top-nav .mac-nav-item { min-height:38px;padding:7px 12px;white-space:nowrap; }
+.workspace-top-nav .mac-nav-item svg { display:none; }
+.workspace-footer { position:absolute;bottom:0;left:var(--sidebar-width);right:0;height:var(--workspace-footer-height);padding:0 24px env(safe-area-inset-bottom);display:flex;align-items:center;justify-content:space-between;gap:18px;border-top:1px solid var(--ui-line);background:var(--ui-bg);font-size:11px;color:var(--ui-muted);z-index:36; }
+.workspace-compact .workspace-footer { left:0; }
+.workspace-footer>span { white-space:nowrap;flex:none; }
+.workspace-storage-status { min-width:0;text-align:left; }
+.workspace-sync-summary { display:flex;align-items:center;gap:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65vw; }
+.workspace-status-dot { width:6px;height:6px;background:var(--ui-muted);border-radius:50%;flex:none; }
+.workspace-status-dot.has-error { background:#dc7c34; }
+.workspace-shell .mac-main.mac-task-main { overflow:hidden;padding-bottom:16px; }
+.workspace-shell .mac-main>.workspace-toolbar { max-width:none; }
+.workspace-shell .app-surface { border-radius:16px;box-shadow:0 1px 2px #00000004; }
+.workspace-shell .mac-stats { gap:12px;border-bottom:0;padding-bottom:0; }
+.workspace-shell .mac-stats .app-surface { flex-direction:column;gap:5px;padding:18px 22px!important;background:var(--ui-surface);border:1px solid var(--ui-line);border-radius:14px; }
+.workspace-shell .study-hub { padding:24px; }
+.workspace-shell .btn-primary,.workspace-shell .btn-secondary { border-radius:9px; }
+.workspace-shell.mac-native-window .workspace-sidebar-brand { padding-top:52px;min-height:102px; }
+.workspace-shell.mac-native-window:not(.workspace-focus) .mac-window-drag-region { width:var(--sidebar-width);height:48px;z-index:41; }
+.workspace-shell.mac-native-window.workspace-compact:not(.workspace-focus) .mac-window-drag-region { width:104px; }
+.workspace-shell.mac-native-window.workspace-compact .workspace-topline { padding-left:88px; }
+.workspace-backdrop { position:fixed;inset:0;background:#1113;z-index:70; }
+@media(max-width:760px) {
+  .workspace-shell .mac-main { left:0;padding:0 16px 24px; }
+  .workspace-shell .workspace-toolbar { padding:8px 16px;margin:0 -16px 20px; }
+  .workspace-shell .workspace-topline { flex-wrap:nowrap;gap:8px; }
+  .workspace-shell .workspace-icon-button { width:44px;height:44px; }
+  .workspace-shell .workspace-top-nav .mac-nav-item { min-height:44px;font-size:13px;padding:8px 12px; }
+  .workspace-shell .workspace-top-nav .mac-nav-label { white-space:nowrap; }
+  .workspace-shell .mac-sidebar { width:min(280px,85vw)!important;z-index:80; }
+  .workspace-shell .mac-sidebar .mac-nav-item { flex-direction:row;min-height:44px;padding:10px 12px;font-size:15px; }
+  .workspace-shell .mac-sidebar .mac-nav-item svg { display:block; }
+  .workspace-shell .mac-sidebar .workspace-sidebar-brand { min-height:72px;padding:12px 8px; }
+  .workspace-shell .mac-sidebar-resizer { display:none; }
+  .workspace-shell .workspace-footer { left:0;padding-inline:16px; }
+  .workspace-shell .mac-stats { gap:8px; }
+  .workspace-shell .mac-stats .app-surface { padding:12px!important; }
+  .workspace-shell .study-hub { padding:18px; }
+  .workspace-shell .mac-main.mac-task-main { padding:0 16px 12px; }
+}
+.workspace-shell.workspace-focus { height:auto;min-height:100dvh;overflow:visible; }

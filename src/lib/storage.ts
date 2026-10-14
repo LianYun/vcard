@@ -7,7 +7,7 @@ import { initialState } from './sm2'
 import { DEFAULT_SCHEDULER, FSRS_ALGORITHM, fsrsPreview, migrateState, validateConfig, rescheduleProjection } from './fsrs'
 import type { SchedulerConfig, ReviewContext } from '../types'
 import type { Quality, StudyData, CardControl, ReviewCommit, ReviewRecord, StudyScope } from '../types'
-import { normalizeTags, normalizeStudyScope } from './tags'
+import { normalizeTags, normalizeStudyScope, renameScopeTag } from './tags'
 import { todayKey, addDays } from './date'
 import { ancestors, selectFresh } from './decks'
 import type { Deck } from '../types'
@@ -241,6 +241,16 @@ export async function loadCustomCards(): Promise<Card[]> {
   return cards.filter((c) => c && typeof c.id === 'string')
 }
 
+/** Read one card without transferring the entire native library. */
+export async function loadCard(id: string): Promise<Card | undefined> {
+  if (await usesNativeStorage()) return (await cloud<Card | null>('card', { id })) ?? undefined
+  if (IS_TAURI) {
+    const row = await invoke<CardRow | null>('get_card', { id })
+    return row ? rowToCard(row) : undefined
+  }
+  return lsRead<Card[]>(LS_KEYS.cards, []).find(card => card?.id === id)
+}
+
 function cardToRow(c: Card): CardRow {
   return {
     deck_id: c.deckId, note_id: c.noteId, anki: c.anki,
@@ -307,6 +317,55 @@ export async function deleteOneCard(id: string): Promise<boolean> {
   lsWrite(LS_KEYS.cards, next)
   await deleteOneProgress(id)
   return true
+}
+
+/** Update existing cards only: never recreate a deleted card or touch its study state. */
+// Unassigned tags are local library metadata; card tags continue to sync with cards.
+const LIBRARY_TAGS_KEY = 'vibe-word:tags:v1'
+export async function loadLibraryTags(): Promise<string[]> {
+  if (await usesNativeStorage()) return normalizeTags(await cloud('libraryTags'))
+  const raw = IS_TAURI ? await invoke<string | null>('get_setting', { key: LIBRARY_TAGS_KEY }) : localStorage.getItem(LIBRARY_TAGS_KEY)
+  return normalizeTags(raw ? JSON.parse(raw) : [])
+}
+async function saveLibraryTags(tags: string[]): Promise<void> {
+  if (await usesNativeStorage()) await cloud('saveLibraryTags', { tags })
+  else if (IS_TAURI) await invoke('set_setting', { key: LIBRARY_TAGS_KEY, value: JSON.stringify(tags) })
+  else localStorage.setItem(LIBRARY_TAGS_KEY, JSON.stringify(tags))
+}
+export async function createLibraryTag(name: string): Promise<void> {
+  await studyTransaction(async () => {
+    const tag = name.trim()
+    if (!tag) throw new Error('标签名称不能为空')
+    const saved = await loadLibraryTags()
+    const cards = await loadCustomCards()
+    if (saved.includes(tag) || cards.some(card => normalizeTags(card.tags).includes(tag))) throw new Error('该标签已存在')
+    await saveLibraryTags([...saved, tag])
+  })
+  window.dispatchEvent(new Event('vibe-library-changed'))
+}
+
+export async function replaceLibraryTag(source: string, replacement: string | null): Promise<void> {
+  const target = replacement === null ? null : replacement.trim()
+  if (!source.trim() || target === '') throw new Error('标签名称不能为空')
+  if (source === target) return
+  try {
+    const ids = (await loadCustomCards()).filter(card => normalizeTags(card.tags).includes(source)).map(card => card.id)
+    for (const id of ids) {
+      const card = await loadCard(id)
+      if (!card || !normalizeTags(card.tags).includes(source)) continue
+      const tags = normalizeTags(normalizeTags(card.tags).flatMap(tag => tag === source ? (target === null ? [] : [target]) : [tag]))
+      await updateOneCard(id, card.front, card.back, card.example ?? null, tags)
+    }
+    await studyTransaction(async () => {
+      const saved = await loadLibraryTags()
+      if (saved.includes(source)) await saveLibraryTags(normalizeTags(saved.flatMap(tag => tag === source ? (target === null ? [] : [target]) : [tag])))
+    })
+    const settings = await loadSettings()
+    const scope = renameScopeTag(settings.studyScope ?? null, source, target)
+    if (JSON.stringify(scope) !== JSON.stringify(settings.studyScope)) await saveSettings({ ...settings, studyScope: scope })
+  } finally {
+    window.dispatchEvent(new Event('vibe-library-changed'))
+  }
 }
 
 // ── Progress ────────────────────────────────────────────────────────────
@@ -407,22 +466,25 @@ export const DEFAULT_SETTINGS: Settings = { newCardsPerDay: 10 }
 export async function loadSettings(): Promise<Settings> {
   if (await usesNativeStorage()) {
     const settings = await cloud<Settings>('settings')
-    return { ...settings, studyScope: normalizeStudyScope(settings.studyScope) }
+    return { ...settings, studyDeckId: null, studyScope: normalizeStudyScope(settings.studyScope, settings.studyDeckId) }
   }
   if (IS_TAURI) {
     const val = await invoke<string | null>('get_setting', { key: 'new_cards_per_day' })
     const scope = await invoke<string | null>('get_setting', { key: 'study_scope' })
-    return { newCardsPerDay: val ? parseInt(val, 10) : DEFAULT_SETTINGS.newCardsPerDay, studyScope: scope ? normalizeStudyScope(JSON.parse(scope)) : null }
+    const studyDeckId = await invoke<string | null>('get_setting', { key: 'study_deck_id' })
+    return { studyDeckId: null, newCardsPerDay: val ? parseInt(val, 10) : DEFAULT_SETTINGS.newCardsPerDay, studyScope: normalizeStudyScope(scope ? JSON.parse(scope) : null, studyDeckId) }
   }
   const settings = { ...DEFAULT_SETTINGS, ...lsRead<Partial<Settings>>(LS_KEYS.settings, {}) }
-  return { ...settings, studyScope: normalizeStudyScope(settings.studyScope) }
+  return { ...settings, studyDeckId: null, studyScope: normalizeStudyScope(settings.studyScope, settings.studyDeckId) }
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {
-  if (await usesNativeStorage()) return cloud('saveSettings', { limit: settings.newCardsPerDay, studyScope: settings.studyScope ?? null })
+  settings = { ...settings, studyScope: normalizeStudyScope(settings.studyScope, settings.studyDeckId), studyDeckId: null }
+  if (await usesNativeStorage()) return cloud('saveSettings', { limit: settings.newCardsPerDay, studyScope: settings.studyScope ?? null, studyDeckId: settings.studyDeckId ?? null })
   if (IS_TAURI) {
     await invoke('set_setting', { key: 'new_cards_per_day', value: String(settings.newCardsPerDay) })
     await invoke('set_setting', { key: 'study_scope', value: JSON.stringify(settings.studyScope ?? null) })
+    await invoke('set_setting', { key: 'study_deck_id', value: settings.studyDeckId ?? '' })
     return
   }
   lsWrite(LS_KEYS.settings, settings)
@@ -628,12 +690,12 @@ export async function loadImportImage(id: string): Promise<string> { return clou
 
 // The settings page commits the whole draft; native model/study events share one batch.
 export async function savePreferences(value: {
-  limit: number; studyScope: import('../types').StudyScope; llm: LLMConfig; image: ImageGenConfig; cloud: boolean | null; language: LanguagePreference
+  limit: number; studyDeckId?: string | null; studyScope: import('../types').StudyScope; llm: LLMConfig; image: ImageGenConfig; cloud: boolean | null; language: LanguagePreference
 }): Promise<void> {
   if (await usesNativeStorage()) {
-    await cloud('savePreferences', { limit: value.limit, studyScope: value.studyScope, llm: value.llm, image: value.image, enabled: value.cloud })
+    await cloud('savePreferences', { limit: value.limit, studyScope: value.studyScope, studyDeckId: value.studyDeckId ?? null, llm: value.llm, image: value.image, enabled: value.cloud })
   } else {
-    await saveSettings({ newCardsPerDay: value.limit, studyScope: value.studyScope })
+    await saveSettings({ newCardsPerDay: value.limit, studyScope: value.studyScope, studyDeckId: value.studyDeckId ?? null })
     await saveLLMConfig(value.llm)
     await saveImageGenConfig(value.image)
   }
@@ -782,6 +844,12 @@ export async function replaceRegeneratedCard(expected: Card, draft: { front: str
 }
 
 // Window layout preferences stay local to this device.
+export function loadSidebarCollapsed(): boolean {
+  try { return localStorage.getItem('vibe-word:sidebar-collapsed:v1') === 'true' } catch { return false }
+}
+export function saveSidebarCollapsed(value: boolean): void {
+  try { localStorage.setItem('vibe-word:sidebar-collapsed:v1', JSON.stringify(value)) } catch { /* Optional device preference. */ }
+}
 export function loadSidebarWidth(): number | null {
   try {
     const value: unknown = JSON.parse(localStorage.getItem('vibe-word:sidebar-width:v1') ?? 'null')
@@ -881,16 +949,25 @@ async function browserAIState(value?: import('./aiTaskTypes').AITaskState): Prom
     tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('本地保存失败'))
   })
 }
+let savedAITasks = new Map<string, import('./aiTaskTypes').GenerationTask>()
 export async function loadAITasks(): Promise<import('./aiTaskTypes').AITaskState> {
   const empty = { version: 1 as const, tasks: [] }
   const value = await usesNativeStorage() ? await cloud<import('./aiTaskTypes').AITaskState | null>('aiTasks') : IS_TAURI
     ? JSON.parse(await invoke<string>('get_setting', { key: 'ai-tasks-v1' }) || 'null') : await browserAIState()
   if (!value) return empty
   if (value.version !== 1 || !Array.isArray(value.tasks) || value.tasks.some((task: import('./aiTaskTypes').GenerationTask) => !task.id || !Array.isArray(task.drafts))) throw new Error('任务队列格式无效，请备份后检查')
+  savedAITasks = new Map((value as import('./aiTaskTypes').AITaskState).tasks.map(task => [task.id, task]))
   return value
 }
 export async function saveAITasks(state: import('./aiTaskTypes').AITaskState): Promise<void> {
-  if (await usesNativeStorage()) await cloud('saveAITasks', { state })
+  if (await usesNativeStorage()) {
+    await cloud('patchAITasks', {
+      tasks: state.tasks.filter(task => savedAITasks.get(task.id) !== task),
+      order: state.tasks.map(task => task.id), migratedImports: state.migratedImports,
+    })
+    // Do not advance the baseline on failure: retries must resend unsaved tasks.
+    savedAITasks = new Map(state.tasks.map(task => [task.id, task]))
+  }
   else if (IS_TAURI) await invoke('set_setting', { key: 'ai-tasks-v1', value: JSON.stringify(state) })
   else await browserAIState(state)
 }
@@ -910,6 +987,7 @@ export async function confirmAIDraft(draftId: string, card: Card, expected?: Car
   await studyTransaction(async () => {
     if (!card.front.trim() || !card.back.trim() || card.anki) throw new Error('卡片正反面不能为空')
     if (await usesNativeStorage()) { await cloud('confirmAIDraft', { draftId, card, expected }); return }
+    if (!(await loadDecks()).some(d => d.id === (card.deckId ?? 'default'))) throw new Error('牌组不存在，请重新选择')
     if (IS_TAURI) {
       await invoke('confirm_ai_draft', { draftId, card: cardToRow(card), expected: expected ? cardToRow(expected) : null, day: todayKey() }); return
     }

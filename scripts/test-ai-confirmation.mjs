@@ -42,3 +42,38 @@ await storage.confirmAIDraft('one', card)
 assert.equal((await storage.loadCustomCards()).length, 0, 'Receipts never resurrect deleted cards')
 await assert.rejects(storage.confirmAIDraft('deleted', card, card), /已删除/)
 console.log('PASS browser atomic journal recovery, quota gating, confirmation receipts, deletion, replacement conflicts and progress/stat preservation')
+
+// Native saves must send only changed tasks, and a failed write must not move
+// the reference baseline (otherwise the retry would silently omit its changes).
+const nativeCalls = []
+let nativeFailure = false
+const initialTasks = { version: 1, migratedImports: true, tasks: [
+  { id: 'old', status: 'done', drafts: [{ card: { back: 'x'.repeat(500_000) } }] },
+  { id: 'current', status: 'review', drafts: [] },
+] }
+const native = load('src/lib/storage.ts', {
+  './date': date, './sm2': sm2, './tags': tags, './decks': {}, './fsrs': fsrsTestDependency,
+  './log': { createLogger: () => ({ info() {}, debug() {}, error() {} }) },
+  '@tauri-apps/api/core': { invoke: async (command, payload) => {
+    if (command === 'native_cloud_storage') return true
+    if (payload.command === 'aiTasks') return structuredClone(initialTasks)
+    assert.equal(payload.command, 'patchAITasks')
+    nativeCalls.push(payload.args)
+    if (nativeFailure) throw Error('disk full')
+  } },
+}, { window: { __TAURI_INTERNALS__: {}, dispatchEvent() {} } })
+const loaded = await native.loadAITasks()
+await native.saveAITasks(loaded)
+assert.equal(nativeCalls.at(-1).tasks.length, 0)
+const changed = { ...loaded, tasks: [loaded.tasks[0], { ...loaded.tasks[1], status: 'done' }] }
+nativeFailure = true
+await assert.rejects(native.saveAITasks(changed), /disk full/)
+nativeFailure = false
+await native.saveAITasks(changed)
+assert.equal(nativeCalls.at(-1).tasks.length, 1)
+assert.equal(nativeCalls.at(-1).tasks[0].id, 'current')
+assert.ok(JSON.stringify(nativeCalls.at(-1)).length < 1000)
+await native.saveAITasks({ ...changed, tasks: [changed.tasks[1]] })
+assert.equal(nativeCalls.at(-1).tasks.length, 0)
+assert.equal(nativeCalls.at(-1).order.join(), 'current')
+console.log('PASS native incremental payload, failed-write retry and task removal')

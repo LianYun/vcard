@@ -6,6 +6,8 @@ final class SettingsDraft: ObservableObject {
     struct Value: Codable, Equatable {
         var limit = 10
         var studyTags: [String]?
+        var studyScope: StudyScope?
+        var scope: StudyScope { get { studyScope ?? StudyScope(tags: studyTags) } set { studyScope = newValue; studyTags = nil } }
         var language = "system"
         var cloud = false
     }
@@ -19,7 +21,7 @@ final class SettingsDraft: ObservableObject {
     func load(store: AppStore, persistence: Persistence) throws {
         guard !loaded, let directory = persistence.store?.directory else { return }
         url = directory.appendingPathComponent("settings-draft.json")
-        let current = Value(limit: store.library.newCardsPerDay, studyTags: store.library.studyScope.tags,
+        let current = Value(limit: store.library.newCardsPerDay, studyScope: store.library.studyScope,
                             language: AppLanguage.defaults.string(forKey: AppLanguage.key) ?? "system", cloud: persistence.iCloudEnabled)
         baseline = current; value = current
         if let url, FileManager.default.fileExists(atPath: url.path) {
@@ -30,7 +32,7 @@ final class SettingsDraft: ObservableObject {
         loaded = true
     }
     func refresh(_ current: Value) {
-        if value.studyTags == baseline.studyTags { value.studyTags = current.studyTags }
+        if value.scope == baseline.scope { value.scope = current.scope }
         if value.limit == baseline.limit { value.limit = current.limit }
         if value.language == baseline.language { value.language = current.language }
         if value.cloud == baseline.cloud { value.cloud = current.cloud }
@@ -46,14 +48,14 @@ final class SettingsDraft: ObservableObject {
     func discard() throws { value = baseline; try persistDraft() }
     func save(persistence: Persistence) async throws {
         guard (0...100).contains(value.limit) else { throw OpenFormat.failure("每天新词上限必须是 0 到 100 的整数") }
-        guard value.studyTags?.isEmpty != true else { throw OpenFormat.failure("请至少选择一个标签") }
+        guard value.scope.isValid else { throw OpenFormat.failure("请补全学习范围") }
         var next = value
-        next.studyTags = StudyScope(tags: value.studyTags).tags
+        next.scope = value.scope
         let wasEnabled = persistence.iCloudEnabled
         try await persistence.setICloudEnabled(next.cloud)
         do {
             var event = SyncEvent(kind: .studyConfig, limit: next.limit)
-            event.studyScope = StudyScope(tags: next.studyTags)
+            event.studyScope = next.scope
             try await persistence.append([event])
         } catch {
             try? await persistence.setICloudEnabled(wasEnabled)
@@ -92,11 +94,7 @@ struct SettingsView: View {
             footer: { Text(L("控制每天自动引入多少张新词卡。已初始化进度的卡片不受此限制。")) }
 
             Section {
-                Toggle(L("指定标签"), isOn: Binding(get: { draft.value.studyTags != nil }, set: { draft.value.studyTags = $0 ? [] : nil }))
-                    .accessibilityIdentifier("settings.tagScope")
-                if draft.value.studyTags != nil {
-                    StudyTagSelector(cards: store.library.cards, selection: Binding(get: { draft.value.studyTags ?? [] }, set: { draft.value.studyTags = $0 }))
-                } else { Text(L("全部卡片")).foregroundStyle(.secondary) }
+                CompositeScopeEditor(scope: Binding(get: { draft.value.scope }, set: { draft.value.scope = $0 }), library: store.library, limit: draft.value.limit)
             } header: { Text(L("默认学习范围")) }
             footer: { Text(L("点击「开始学习」时使用此范围，下次开始生效。")) }
 
@@ -138,7 +136,7 @@ struct SettingsView: View {
             } header: { Text(L("模型配置")) }
             footer: { Text(L("模型配置仅供查看，请在桌面端修改后通过 iCloud 同步。")) }
         }
-        .navigationTitle(L("设置"))
+        .navigationTitle(L("设置")).navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $backups) { NavigationStack { StudyCenterView(section: 2) }.modifier(StoreErrorAlert()) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if draft.dirty {
@@ -252,7 +250,7 @@ struct SettingsSheet: View {
     }
     private func refresh() {
         guard draft.loaded else { return }
-        draft.refresh(.init(limit: store.library.newCardsPerDay, studyTags: store.library.studyScope.tags,
+        draft.refresh(.init(limit: store.library.newCardsPerDay, studyScope: store.library.studyScope,
                             language: AppLanguage.defaults.string(forKey: AppLanguage.key) ?? "system", cloud: persistence.iCloudEnabled))
     }
     private func save() {
@@ -327,7 +325,7 @@ struct SchedulerSettingsView: View {
             if !message.isEmpty { Text(message).foregroundStyle(.green) }
         }
         .disabled(busy)
-        .navigationTitle(L("智能复习"))
+        .navigationTitle(L("智能复习")).navigationBarTitleDisplayMode(.inline)
         .overlay { if busy { ProgressView(L("处理中…")).padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16)) } }
         .onAppear { load() }
         .onDisappear { trainingTask?.cancel() }
@@ -363,5 +361,86 @@ struct SchedulerSettingsView: View {
         busy = true; error = ""
         let expected = baseline.id
         Task { do { _ = try await persistence.rescheduleFSRS(expected); load(); message = L("已备份并重新安排") } catch { self.error = error.localizedDescription }; busy = false }
+    }
+}
+
+
+struct CompositeScopeEditor: View {
+    @Binding var scope: StudyScope
+    let library: Library
+    var limit: Int
+    @State private var selection: Int?
+    @State private var selectingTags = false
+    @State private var query = ""
+    private var preview: StudySelection {
+        var source = library; source.newCardsPerDay = limit
+        return StudySelection.make(library: source, scope: scope)
+    }
+    var body: some View {
+        Group {
+        Toggle(L("自定义范围"), isOn: Binding(get: { scope.mode == "custom" }, set: { scope = $0 ? StudyScope(rules: [StudyScopeRule(deckIds: [])]) : StudyScope() }))
+        if scope.mode == "custom" {
+            ForEach(scope.rules.indices, id: \.self) { index in
+                if index > 0 { Text(L("或者")).foregroundStyle(.secondary) }
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text(L("范围 {0}", "\(index + 1)")).font(.headline)
+                        Spacer()
+                        Button(L("删除")) { scope.rules.remove(at: index) }.disabled(scope.rules.count == 1)
+                    }
+                    Text(StudyScope(rules: [scope.rules[index]]).summary(decks: library.decks)).font(.subheadline)
+                    HStack {
+                        Button(L("选择牌组")) { selectingTags = false; query = ""; selection = index }
+                        Button(L("选择标签")) { selectingTags = true; query = ""; selection = index }
+                    }.buttonStyle(.bordered)
+                    Text(L("包含所选牌组及其子牌组。")).font(.caption).foregroundStyle(.secondary)
+                    Text(L("匹配 {0} 张卡片", "\(library.cards.filter { StudyScope(rules: [scope.rules[index]]).matches($0, decks: library.decks) }.count)"))
+                }.padding(.vertical, 8)
+            }
+            Button(L("＋ 添加学习范围")) { scope.rules.append(StudyScopeRule(deckIds: [])) }
+            if !scope.isValid { Text(L("请补全学习范围")).foregroundStyle(.red) }
+        } else { Text(L("全部卡片")).foregroundStyle(.secondary) }
+        Text(L("合计匹配 {0} 张卡片，已去重", "\(preview.matching.count)"))
+        Text(L("本次可学：待复习 {0} 张 · 新卡 {1} 张", "\(preview.reviews.count)", "\(preview.fresh.count)"))
+        if preview.matching.isEmpty { Text(L("当前没有匹配卡片")).foregroundStyle(.secondary) }
+        }
+        .sheet(isPresented: Binding(get: { selection != nil }, set: { if !$0 { selection = nil } })) {
+            NavigationStack {
+                if let index = selection, scope.rules.indices.contains(index) {
+                    Form {
+                        if selectingTags {
+                            Toggle(L("全部标签"), isOn: Binding(get: { scope.rules[index].tags == nil }, set: { scope.rules[index].tags = $0 ? nil : [] }))
+                            StudyTagSelector(cards: library.cards.filter { card in
+                                StudyScope(rules: [StudyScopeRule(deckIds: scope.rules[index].deckIds)]).matches(card, decks: library.decks)
+                            }, selection: Binding(get: { scope.rules[index].tags ?? [] }, set: { scope.rules[index].tags = $0 }))
+                        } else {
+                            Toggle(L("全部牌组"), isOn: Binding(get: { scope.rules[index].deckIds == nil }, set: { scope.rules[index].deckIds = $0 ? nil : [] }))
+                            TextField(L("搜索牌组"), text: $query)
+                            ForEach(library.decks.sorted { library.deckPath($0.id) < library.deckPath($1.id) }.filter { query.isEmpty || library.deckPath($0.id).localizedCaseInsensitiveContains(query) }) { deck in
+                                Toggle(library.deckPath(deck.id), isOn: Binding(get: { scope.rules[index].deckIds?.contains(deck.id) ?? false }, set: { checked in
+                                    var ids = scope.rules[index].deckIds ?? []
+                                    if checked { ids.append(deck.id) } else { ids.removeAll { $0 == deck.id } }
+                                    scope.rules[index].deckIds = ids
+                                }))
+                            }
+                        }
+                    }
+                    .navigationTitle(L(selectingTags ? "选择标签" : "选择牌组"))
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("完成")) { selection = nil } } }
+                }
+            }.presentationDetents([.medium, .large])
+        }
+    }
+}
+
+struct StudyScopeSummaryView: View {
+    let scope: StudyScope
+    let decks: [Deck]
+    var body: some View {
+        if scope.rules.count > 2 {
+            DisclosureGroup(L("{0} 个学习范围", "\(scope.rules.count)")) {
+                Text(scope.summary(decks: decks)).fixedSize(horizontal: false, vertical: true)
+            }
+        } else { Text(L("学习范围：{0}", scope.summary(decks: decks))) }
     }
 }

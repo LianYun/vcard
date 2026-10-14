@@ -20,6 +20,7 @@ public struct AITask: Codable, Identifiable, Sendable {
     public var model: String?
     public var error: String?
     public var warning: String?
+    public var targetDeckId: String?
     public var expected: Card?
     public var targetTaskID: String?
     public var targetDraftID: String?

@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import type { Card, StudyScope } from '../types'
-import { matchesStudyScope, normalizeStudyScope, normalizeTags } from '../lib/tags'
+import type { Card, Deck, StudyScope } from '../types'
+import { matchesStudyScope, normalizeStudyTags, normalizeStudyScope, normalizeTags } from '../lib/tags'
 import { t } from '../lib/i18n'
 
-export function scopeLabel(scope: StudyScope): string {
-  return scope === null ? t('全部卡片') : scope.length ? scope.map(tag => tag || t('未打标签')).join('、') : t('尚未选择标签')
+export function scopeLabel(scope: StudyScope, decks: Deck[] = []): string {
+  const value = normalizeStudyScope(scope)
+  if (value.mode === 'all') return t('全部卡片')
+  if (!value.rules.length) return t('请补全学习范围')
+  return value.rules.map(rule => `${rule.deckIds === null ? t('全部牌组') : rule.deckIds.map(id => decks.find(deck => deck.id === id)?.name ?? id).join('、')}：${rule.tags === null ? t('全部标签') : rule.tags.map(tag => tag || t('未打标签')).join('、') || t('尚未选择标签')}`).join('；')
 }
 
 export function TagSelector({ cards, value, onChange }: { cards: Card[]; value: string[]; onChange: (value: string[]) => void }) {
@@ -16,7 +19,7 @@ export function TagSelector({ cards, value, onChange }: { cards: Card[]; value: 
       {tags.filter(tag => (tag || t('未打标签')).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).map(tag => {
         const count = cards.filter(card => matchesStudyScope(card, [tag])).length
         return <label className="tag-option" key={tag}>
-          <input type="checkbox" checked={value.includes(tag)} onChange={e => onChange(normalizeStudyScope(e.target.checked ? [...value, tag] : value.filter(item => item !== tag))!)} />
+          <input type="checkbox" checked={value.includes(tag)} onChange={e => onChange(normalizeStudyTags(e.target.checked ? [...value, tag] : value.filter(item => item !== tag))!)} />
           <span>{tag || t('未打标签')}</span><small>{count}</small>
         </label>
       })}
@@ -28,4 +31,10 @@ export function TagSelector({ cards, value, onChange }: { cards: Card[]; value: 
     </div>
     <p role="status">{t('已选择 {0} 个标签，包含 {1} 张卡片', value.length, cards.filter(card => matchesStudyScope(card, value)).length)}</p>
   </div>
+}
+
+export function ScopeSummary({ scope, decks = [] }: { scope: StudyScope; decks?: Deck[] }) {
+  const value = normalizeStudyScope(scope)
+  const label = scopeLabel(scope, decks)
+  return value.rules.length > 2 ? <details><summary>{t('{0} 个学习范围', value.rules.length)}</summary><span>{label}</span></details> : <span>{label}</span>
 }

@@ -1,19 +1,89 @@
 import Foundation
 
-public struct StudyScope: Codable, Sendable, Equatable {
+public struct StudyScopeRule: Codable, Sendable, Equatable {
+    public var deckIds: [String]?
     public var tags: [String]?
+    public init(deckIds: [String]? = nil, tags: [String]? = nil) { self.deckIds = deckIds; self.tags = tags }
+    enum CodingKeys: String, CodingKey { case deckIds, tags }
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        deckIds = container.contains(.deckIds) ? try container.decodeIfPresent([String].self, forKey: .deckIds) : []
+        tags = container.contains(.tags) ? try container.decodeIfPresent([String].self, forKey: .tags) : []
+        deckIds = deckIds.map { Array(Set($0.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })).sorted() }
+        tags = tags.map { Array(Set($0.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })).sorted() }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(deckIds, forKey: .deckIds)
+        try container.encode(tags, forKey: .tags)
+    }
+
+}
+public struct StudyScope: Codable, Sendable, Equatable {
+    public var version = 2
+    public var mode = "all"
+    public var rules: [StudyScopeRule] = []
+    // Compatibility accessors for old single-range entry points.
+    public var deckId: String? {
+        get { rules.count == 1 && rules[0].deckIds?.count == 1 ? rules[0].deckIds?.first : nil }
+        set {
+            guard let newValue else { return }
+            if mode == "all" { mode = "custom"; rules = [StudyScopeRule(deckIds: [newValue])] }
+            else { rules = rules.map { StudyScopeRule(deckIds: [newValue], tags: $0.tags) } }
+        }
+    }
+    public var tags: [String]? { mode == "all" ? nil : rules.count == 1 ? rules[0].tags : [] }
     public init(tags: [String]? = nil) {
-        self.tags = tags.map { Array(Set($0.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })).sorted() }
+        if let tags { mode = "custom"; rules = [StudyScopeRule(tags: Array(Set(tags.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })).sorted())] }
     }
-    public func matches(_ card: Card) -> Bool {
-        guard let tags else { return true }
+    public init(rules: [StudyScopeRule]) { mode = "custom"; self.rules = rules }
+    enum CodingKeys: String, CodingKey { case version, mode, rules, deckId, tags }
+    public init(from decoder: Decoder) throws {
+        if let scalar = try? decoder.singleValueContainer() {
+            if scalar.decodeNil() { self.init(); return }
+            if let tags = try? scalar.decode([String].self) { self.init(tags: tags); return }
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let version = try container.decodeIfPresent(Int.self, forKey: .version) {
+            self.init(rules: [])
+            guard version == 2 else { return }
+            mode = try container.decodeIfPresent(String.self, forKey: .mode) == "all" ? "all" : "custom"
+            rules = mode == "all" ? [] : try container.decodeIfPresent([StudyScopeRule].self, forKey: .rules) ?? []
+        } else {
+            self.init(tags: try container.decodeIfPresent([String].self, forKey: .tags))
+            deckId = try container.decodeIfPresent(String.self, forKey: .deckId)
+        }
+    }
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(mode, forKey: .mode)
+        try container.encode(rules, forKey: .rules)
+    }
+    public var isValid: Bool {
+        mode == "all" || !rules.isEmpty && rules.allSatisfy { $0.deckIds?.isEmpty != true && $0.tags?.isEmpty != true }
+    }
+    public func matches(_ card: Card) -> Bool { matches(card, decks: []) }
+    public func matches(_ card: Card, decks: [Deck]) -> Bool {
+        if mode == "all" { return true }
+        var ancestors = Set<String>(), id: String? = card.deckId ?? "default"
+        while let current = id, ancestors.insert(current).inserted { id = decks.first { $0.id == current }?.parentId }
         let labels = (card.tags ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        return tags.contains { $0.isEmpty ? labels.isEmpty : labels.contains($0) }
+        return rules.contains { rule in
+            (rule.deckIds.map { !$0.filter { ancestors.contains($0) }.isEmpty } ?? true) &&
+            (rule.tags.map { $0.contains { $0.isEmpty ? labels.isEmpty : labels.contains($0) } } ?? true)
+        }
     }
-    public var label: String {
-        guard let tags else { return L("全部卡片") }
-        return tags.isEmpty ? L("尚未选择标签") : tags.map { $0.isEmpty ? L("未打标签") : $0 }.joined(separator: "、")
+    public func summary(decks: [Deck]) -> String {
+        if mode == "all" { return L("全部卡片") }
+        return rules.map { rule in
+            let names = rule.deckIds.map { ids in ids.map { id in decks.first { $0.id == id }?.name ?? id }.joined(separator: "、") } ?? L("全部牌组")
+            let tags = rule.tags.map { $0.map { $0.isEmpty ? L("未打标签") : $0 }.joined(separator: "、") } ?? L("全部标签")
+            return names + "：" + tags
+        }.joined(separator: "；")
     }
+    public var label: String { summary(decks: []) }
 }
 
 // Immutable records avoid whole-library overwrites and lost daily counters when
@@ -234,12 +304,12 @@ public struct StudySelection {
     public var freshCount: Int
     public var budget: Int
     public var emptyReason: String {
-        if matching.isEmpty { return "没有匹配卡片，请选择其他标签" }
+        if matching.isEmpty { return "当前没有匹配卡片" }
         if reviews.isEmpty && freshCount > 0 && budget == 0 { return "今日新卡额度已用完" }
         return "当前范围暂无待学卡片"
     }
     public static func make(library: Library, scope: StudyScope, today: String = Day.key()) -> StudySelection {
-        let matching = library.cards.filter(scope.matches)
+        let matching = library.cards.filter { scope.matches($0, decks: library.decks) }
         let cards = matching.filter { library.controls[$0.id]?.available(on: today) ?? true }
         let budget = max(0, library.newCardsPerDay - (library.issued[today]?.count ?? 0))
         var groups = Set<String>()
@@ -268,12 +338,13 @@ extension Library {
 // Shared by the Mac bridge and iOS. The receipt is the formal add/edit event ID;
 // the draft itself never enters the synchronized event stream.
 public enum AIConfirmation {
-    public static func events(existing: [SyncEvent], draftID: String, card: Card, expected: Card? = nil) throws -> [SyncEvent] {
+    public static func events(existing: [SyncEvent], draftID: String, card: Card, expected: Card? = nil, library cachedLibrary: Library? = nil) throws -> [SyncEvent] {
         let receipt = "ai-confirm:\(draftID)"
         if existing.contains(where: { $0.id == receipt }) { return [] }
         guard !card.front.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !card.back.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, card.anki == nil else { throw OpenFormat.failure("卡片正反面不能为空") }
-        let library = Library(events: existing)
+        let library = cachedLibrary ?? Library(events: existing)
+        guard library.decks.contains(where: { $0.id == (card.deckId ?? "default") }) else { throw OpenFormat.failure("牌组不存在，请重新选择") }
         if let expected {
             guard let current = library.cards.first(where: { $0.id == expected.id }) else { throw OpenFormat.failure("卡片已删除，请关闭后重新检查") }
             guard current.deckId == expected.deckId, (current.tags ?? []) == (expected.tags ?? []) else { throw OpenFormat.failure("卡片内容已更新，请关闭后重新生成") }

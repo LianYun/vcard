@@ -7,6 +7,7 @@ import { createLogger } from './lib/log'
 import './index.css'
 import './theme.css'
 import './mac.css'
+import './workspace.css'
 import './lib/theme'
 
 const log = createLogger('main')

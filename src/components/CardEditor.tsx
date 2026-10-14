@@ -1,12 +1,14 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import type { Card, Deck } from '../types'
+import { useLibraryTags } from '../hooks/useLibraryTags'
+import { CardOrganization } from './CardOrganization'
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import type { Card } from '../types'
 import type { ImportDraft } from '../lib/importTypes'
 import { addCard, findCard } from '../lib/cardStore'
 import { ensureProgressSync, loadProgress, saveOneProgress, loadDecks, saveEditedCard, previewAnkiEdit, replaceRegeneratedCard } from '../lib/storage'
 import { generationQueue } from '../lib/generationQueue'
 import { documentImports } from '../lib/documentImport'
 import { normalizeTags, parseTags } from '../lib/tags'
-import { deckPath } from '../lib/decks'
+import { DeckPicker } from './DeckEditor'
 import { localizedMessage, t } from '../lib/i18n'
 import { MarkdownEditor } from './MarkdownEditor'
 import { ExampleEditor } from './ExampleEditor'
@@ -15,8 +17,8 @@ import { CardFace } from './CardView'
 type Saved = () => void
 export type EditorRequest =
   | { kind: 'draft'; taskId: string; draftId: string; onSaved?: Saved }
-  | { kind: 'create'; onSaved?: Saved }
-  | { kind: 'card'; id: string; onSaved?: Saved }
+  | { kind: 'create'; initialDeckId?: string; initialTags?: string[]; onSaved?: Saved }
+  | { kind: 'card'; id: string; card?: Card; onSaved?: Saved }
   | { kind: 'import'; jobId: string; draftId: string; cards: NonNullable<ImportDraft['cards']>; reverse: boolean; source: string; onSaved?: Saved }
   | { kind: 'proposal'; card: Card; draft: { front: string; back: string; example: string }; onSaved?: Saved }
 const EditorContext = createContext<(request: EditorRequest) => void>(() => { throw new Error('CardEditorProvider missing') })
@@ -29,7 +31,9 @@ export function CardEditorProvider({ children }: { children: ReactNode }) {
   return <EditorContext.Provider value={setRequest}>{children}{request && <CardEditor request={request} onClose={() => setRequest(null)} />}</EditorContext.Provider>
 }
 
-function CardEditor({ request, onClose }: { request: EditorRequest; onClose: () => void }) {
+export function CardEditor({ request, onClose, embedded = false, targetDeckId, onManage, availableTags = [] }: { onManage?: (view: 'decks' | 'tags') => void; availableTags?: string[]; request: EditorRequest; onClose: () => void; embedded?: boolean; targetDeckId?: string }) {
+  const { tags: libraryTags } = useLibraryTags(availableTags)
+  const titleId = useId()
   const dialog = useRef<HTMLDialogElement>(null)
   const lock = useRef(false)
   const draftRevision = useRef(0)
@@ -38,7 +42,6 @@ function CardEditor({ request, onClose }: { request: EditorRequest; onClose: () 
   const leaveDialog = useRef<HTMLDialogElement | null>(null)
   const [cards, setCards] = useState<Card[]>([])
   const [original, setOriginal] = useState<Card[]>([])
-  const [decks, setDecks] = useState<Deck[]>([])
   const [index, setIndex] = useState(0)
   const [tags, setTags] = useState<string[]>([])
   const [fields, setFields] = useState<Record<string, string>>({})
@@ -46,6 +49,8 @@ function CardEditor({ request, onClose }: { request: EditorRequest; onClose: () 
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [verified, setVerified] = useState(false)
+  const editRevision = useRef(0)
   const [leaving, setLeaving] = useState(false)
   const [continueAdding, setContinueAdding] = useState(true)
   const [notice, setNotice] = useState('')
@@ -58,10 +63,18 @@ function CardEditor({ request, onClose }: { request: EditorRequest; onClose: () 
   const label = request.kind === 'draft' ? '保存草稿' : request.kind === 'create' ? '创建卡片' : request.kind === 'import' ? '保存草稿' : request.kind === 'proposal' ? '保存并替换' : card?.anki ? '保存笔记及卡片变化' : '保存修改'
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
-    dialog.current?.showModal()
+    if (!embedded) dialog.current?.showModal()
     let alive = true
+    setVerified(false)
+    const populate = (cs: Card[]) => {
+      setCards(structuredClone(cs)); setOriginal(structuredClone(cs)); setTags(cs.map(c => normalizeTags(c.tags).join(', ')))
+      setFields(cs[0].anki?.fields ?? {}); setInitialFields(cs[0].anki?.fields ?? {})
+      setLoading(false)
+    }
+    const cached = request.kind === 'card' && request.card?.id === request.id ? request.card : undefined
+    // Show the existing snapshot before the native lookup finishes.
+    if (cached) populate([cached])
     void (async () => {
-      const ds = await loadDecks()
       let cs: Card[]
       if (request.kind === 'draft') {
         const draft = generationQueue.getSnapshot().find(t => t.id === request.taskId)?.drafts.find(d => d.id === request.draftId)
@@ -70,6 +83,17 @@ function CardEditor({ request, onClose }: { request: EditorRequest; onClose: () 
       } else if (request.kind === 'card') {
         const current = await findCard(request.id)
         if (!current) throw new Error('卡片已删除，请刷新')
+        if (!alive) return
+        if (cached) {
+          const content = (c: Card) => JSON.stringify([c.front, c.back, c.example ?? '', normalizeTags(c.tags), c.deckId ?? 'default', c.anki ?? null])
+          // Refresh untouched drafts only; a late response must never erase typing.
+          if (content(cached) !== content(current)) {
+            if (editRevision.current > 0) throw new Error('卡片内容已更新，请关闭后重新编辑')
+            populate([current])
+          }
+          setVerified(true)
+          return
+        }
         cs = [current]
       } else if (request.kind === 'import') {
         const current = documentImports.getSnapshot().jobs.find(job => job.id === request.jobId)?.drafts.find(draft => draft.id === request.draftId)
@@ -78,14 +102,13 @@ function CardEditor({ request, onClose }: { request: EditorRequest; onClose: () 
         cs = [current.cards.enToCn, ...(request.reverse ? [current.cards.cnToEn] : [])]
       }
       else if (request.kind === 'proposal') cs = [{ ...request.card, ...request.draft }]
-      else cs = [emptyCard()]
+      else cs = [{ ...emptyCard(), tags: normalizeTags(request.initialTags), deckId: request.initialDeckId ?? 'default' }]
       if (!alive) return
-      const drafts = structuredClone(cs)
-      setCards(drafts); setOriginal(structuredClone(cs)); setTags(cs.map(c => normalizeTags(c.tags).join(', '))); setDecks(ds)
-      setFields(cs[0].anki?.fields ?? {}); setInitialFields(cs[0].anki?.fields ?? {})
+      populate(cs)
+      setVerified(true)
     })().catch(e => { if (alive) setError(localizedMessage(String(e))) }).finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false; dialog.current?.close(); previous?.focus() }
-  }, [request])
+    return () => { alive = false; dialog.current?.close(); if (!embedded) previous?.focus() }
+  }, [request, embedded])
   useEffect(() => {
     if (!dirty) return
     const unload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
@@ -101,10 +124,14 @@ function CardEditor({ request, onClose }: { request: EditorRequest; onClose: () 
     }, 250)
     return () => { alive = false; clearTimeout(timer) }
   }, [card?.id, card?.anki, fields])
-  function patch(value: Partial<Card>) { setCards(previous => previous.map((c, i) => i === index ? { ...c, ...value } : c)); setNotice('') }
+  useEffect(() => {
+    if (!embedded || !targetDeckId) return
+    setCards(previous => previous.map(c => ({ ...c, deckId: targetDeckId })))
+  }, [embedded, targetDeckId])
+  function patch(value: Partial<Card>) { editRevision.current += 1; setCards(previous => previous.map((c, i) => i === index ? { ...c, ...value } : c)); setNotice('') }
   function close() { if (lock.current) return; if (dirty) setLeaving(true); else onClose() }
   async function save() {
-    if (lock.current) return
+    if (lock.current || !verified) return
     lock.current = true; setSaving(true); setError(''); setNotice('')
     try {
       if (request.kind === 'create') {
@@ -121,7 +148,7 @@ function CardEditor({ request, onClose }: { request: EditorRequest; onClose: () 
       else await saveEditedCard(original[0], card, card.anki ? fields : undefined)
       if (request.kind !== 'import' && request.kind !== 'draft') window.dispatchEvent(new Event('vibe-library-changed'))
       request.onSaved?.()
-      if (request.kind === 'create' && continueAdding) {
+      if (request.kind === 'create' && (embedded || continueAdding)) {
         const next = { ...emptyCard(), deckId: card.deckId, tags: card.tags }
         createdCard.current = null
         setCards([next]); setOriginal([structuredClone(next)]); setNotice(t('卡片已创建，可以继续添加。'))
@@ -130,14 +157,16 @@ function CardEditor({ request, onClose }: { request: EditorRequest; onClose: () 
     finally { lock.current = false; setSaving(false) }
   }
   const valid = cards.length > 0 && (card?.anki ? !previewBusy && !ankiError && ankiPreview.cards.length > 0 : cards.every(c => c.front.trim() && (request.kind === 'import' || request.kind === 'proposal' ? c.back.trim() : true)))
-  return <dialog ref={dialog} className="card-editor-page mac-app" data-block-study-shortcuts aria-labelledby="card-editor-title" onCancel={e => { e.preventDefault(); close() }}>
+  const content = <>
     <form onSubmit={e => { e.preventDefault(); void save() }}>
-      <header className="card-editor-header"><button type="button" className="btn-secondary" disabled={saving} onClick={close}>{t('‹ 返回')}</button><h1 id="card-editor-title">{t(title)}</h1><button className="btn-primary" disabled={loading || saving || !valid || (request.kind !== 'create' && !dirty && request.kind !== 'proposal')}>{t(saving ? '保存中…' : label)}</button></header>
+      <header className="card-editor-header" data-tauri-drag-region><>{!embedded && <button type="button" className="btn-secondary" disabled={saving} onClick={close}>{t('‹ 返回')}</button>}</><h1 id={titleId}>{t(title)}</h1><button className="btn-primary" disabled={loading || !verified || saving || !valid || (request.kind !== 'create' && !dirty && request.kind !== 'proposal')}>{t(saving ? '保存中…' : label)}</button></header>
       {loading ? <p role="status">{t('准备中…')}</p> : card && <>
         {request.kind === 'proposal' && <p className="card-editor-note">{t('新版本 · 尚未替换原卡片，学习进度保留')}</p>}
         {request.kind === 'import' && <><div className="card-editor-directions">{cards.map((c, i) => <button key={c.id || i} type="button" className={index === i ? 'btn-primary' : 'btn-secondary'} aria-pressed={index === i} onClick={() => setIndex(i)}>{t(i === 0 ? '正向卡' : '反向卡')}</button>)}</div><details className="card-editor-source"><summary>{t('原文出处')}</summary><p>{request.source}</p></details><p className="card-editor-note">{t('保存草稿后返回审核，接受后才会入库。')}</p></>}
         <fieldset disabled={saving || !!createdCard.current} className="card-editor-meta"><span>{t('题型')} · {t(card.anki ? 'Anki 模板卡' : '问答卡')}</span>
-          {request.kind !== 'import' && request.kind !== 'proposal' && <><label>{t('牌组')}<select className="app-field" value={card.deckId ?? 'default'} onChange={e => patch({ deckId: e.target.value })}>{decks.map(d => <option key={d.id} value={d.id}>{deckPath(d.id, decks)}</option>)}</select></label><label>{t('标签（用逗号分隔，清空可移除）')}<input className="app-field" value={tags[index] ?? ''} onChange={e => { setTags(prev => prev.map((v, i) => i === index ? e.target.value : v)); patch({ tags: parseTags(e.target.value) }) }} /></label></>}
+          {request.kind !== 'import' && request.kind !== 'proposal' && (onManage
+            ? <CardOrganization deckId={card.deckId ?? 'default'} onDeckChange={deckId => patch({ deckId })} tags={normalizeTags(card.tags)} onTagsChange={next => patch({ tags: next })} availableTags={libraryTags} onManage={onManage} />
+            : <><DeckPicker value={card.deckId ?? 'default'} onChange={deckId => patch({ deckId })} /><label>{t('标签（用逗号分隔，清空可移除）')}<input className="app-field" value={tags[index] ?? ''} onChange={e => { setTags(prev => prev.map((v, i) => i === index ? e.target.value : v)); patch({ tags: parseTags(e.target.value) }) }} /></label></>)}
         </fieldset>
         <div className="card-editor-columns"><span>{t('编辑内容')}</span><span>{t('实时预览')}</span></div>
         <div className="card-editor-layout" key={index}>
@@ -145,7 +174,7 @@ function CardEditor({ request, onClose }: { request: EditorRequest; onClose: () 
             <fieldset disabled={saving} className="card-editor-fields" ref={node => { if (node) node.inert = saving }}>
               <h2>{t('编辑 Anki 笔记')}</h2>
               <p className="card-editor-note">{t('修改会更新同一笔记的所有卡片。新增 Cloze 编号会创建新卡，移除编号会删除对应卡片；保留编号的学习进度不变。')}</p>
-              {Object.entries(fields).filter(([name]) => !reserved.has(name)).map(([name, value]) => <label key={name}>{name}<textarea className="app-field" rows={5} value={value} onChange={e => setFields(prev => ({ ...prev, [name]: e.target.value }))} /></label>)}
+              {Object.entries(fields).filter(([name]) => !reserved.has(name)).map(([name, value]) => <label key={name}>{name}<textarea className="app-field" rows={5} value={value} onChange={e => { editRevision.current += 1; setFields(prev => ({ ...prev, [name]: e.target.value })) }} /></label>)}
             </fieldset>
             <aside className="card-editor-preview">
               <h2>{t('卡片预览')}</h2>
@@ -167,10 +196,13 @@ function CardEditor({ request, onClose }: { request: EditorRequest; onClose: () 
             </aside>
           </div>)}
         </div>
-        {request.kind === 'create' && <label className="card-editor-continue"><input type="checkbox" checked={continueAdding} disabled={saving} onChange={e => setContinueAdding(e.target.checked)} />{t('创建后继续添加')}</label>}
+        {request.kind === 'create' && !embedded && <label className="card-editor-continue"><input type="checkbox" checked={continueAdding} disabled={saving} onChange={e => setContinueAdding(e.target.checked)} />{t('创建后继续添加')}</label>}
       </>}
       {error && <p role="alert" className="status-error">{error}</p>}{notice && <p role="status" className="status-success">{notice}</p>}
     </form>
     {leaving && <dialog ref={node => { leaveDialog.current = node; if (node && !node.open) node.showModal() }} className="card-editor-leave" aria-label={t('尚有未保存的修改')} onCancel={e => { e.preventDefault(); e.stopPropagation(); setLeaving(false) }}><p>{t('尚有未保存的修改')}</p><button autoFocus className="btn-primary" onClick={() => setLeaving(false)}>{t('继续编辑')}</button><button className="btn-secondary" onClick={onClose}>{t('放弃修改')}</button></dialog>}
-  </dialog>
+  </>
+  return embedded
+    ? <section className="card-editor-inline mac-app" data-block-study-shortcuts aria-labelledby={titleId}>{content}</section>
+    : <dialog ref={dialog} className="card-editor-page mac-app" data-block-study-shortcuts aria-labelledby={titleId} onCancel={e => { e.preventDefault(); close() }}>{content}</dialog>
 }

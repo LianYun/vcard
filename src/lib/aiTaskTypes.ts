@@ -24,6 +24,8 @@ export interface GenerationTask {
   model?: string
   error?: string
   warning?: string
+  targetTags?: string[]
+  targetDeckId?: string
   expected?: Card
   context?: { source: ImportSection; quote?: string }
   targetDraft?: { taskId: string; draftId: string; revision: number }

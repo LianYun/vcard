@@ -2,6 +2,36 @@ import XCTest
 
 final class VibeWordUITests: XCTestCase {
     @MainActor
+    func testDeckCreationMoveAndStudyReturn() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-local-preview", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN", "-vibe-word.interface-language", "zh-Hans"]
+        app.launchEnvironment["VIBE_TEST_STORE"] = UUID().uuidString
+        app.launchEnvironment["VIBE_TEST_CARDS"] = #"[{"id":"deck-test","front":"Deck fixture","back":"Answer"}]"#
+        app.launch()
+        XCTAssertTrue(app.buttons["卡片"].firstMatch.waitForExistence(timeout: 25)); app.buttons["卡片"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["新建牌组"].waitForExistence(timeout: 10)); app.buttons["新建牌组"].tap()
+        let name = app.textFields["名称"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10)); name.tap(); name.typeText("Topic")
+        app.buttons["保存"].tap()
+        XCTAssertTrue(app.buttons["从现有卡片移入"].waitForExistence(timeout: 10)); app.buttons["从现有卡片移入"].tap()
+        XCTAssertTrue(app.buttons["Deck fixture"].waitForExistence(timeout: 10)); app.buttons["Deck fixture"].tap()
+        app.buttons["确认移动"].tap()
+        let start = app.buttons["开始学习"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10)); start.tap()
+        XCTAssertTrue(app.buttons["study.exit"].waitForExistence(timeout: 10))
+        app.buttons["study.exit"].tap()
+        XCTAssertTrue(app.buttons["从现有卡片移入"].waitForExistence(timeout: 10))
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Deck detail"; shot.lifetime = .keepAlways; add(shot)
+        let manage = app.buttons["管理牌组"]; reveal(manage, in: app); manage.tap()
+        XCTAssertTrue(app.buttons["新建子牌组"].waitForExistence(timeout: 5))
+        app.buttons["新建子牌组"].tap()
+        XCTAssertTrue(name.waitForExistence(timeout: 10)); name.tap(); name.typeText("Child")
+        app.buttons["保存"].tap()
+        XCTAssertTrue(app.staticTexts["Topic::Child"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
     func testAITaskReviewAndRestart() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -38,26 +68,35 @@ final class VibeWordUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["cards.tagStudy"].waitForExistence(timeout: 20))
         app.buttons["open.settings"].tap()
-        let mode = app.switches["settings.tagScope"]
+        let mode = app.switches["自定义范围"]
         reveal(mode, in: app); mode.switches.firstMatch.tap()
+        app.buttons["选择牌组"].firstMatch.tap()
+        app.switches["全部牌组"].switches.firstMatch.tap()
+        app.buttons["完成"].tap()
+        app.buttons["选择标签"].firstMatch.tap()
         let work = app.switches["tags.option.work"]
         reveal(work, in: app); work.switches.firstMatch.tap()
+        app.buttons["完成"].tap()
         app.buttons["settings.save"].tap()
         app.buttons["settings.close"].tap()
-        XCTAssertEqual(app.staticTexts["cards.studyScope"].label, "学习范围：work")
+        XCTAssertEqual(app.staticTexts["cards.studyScope"].label, "学习范围：全部牌组：work")
         app.buttons["cards.startStudy"].tap()
         XCTAssertTrue(app.staticTexts["study.scope"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["study.scope"].label, "学习范围：work")
+        XCTAssertEqual(app.staticTexts["study.scope"].label, "学习范围：全部牌组：work")
         let card = app.descendants(matching: .any)["study.card"].firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 5))
         XCTAssertTrue(["work-one", "work-two"].contains(card.value as? String ?? ""))
         app.buttons["study.exit"].tap()
         app.buttons["cards.tagStudy"].tap()
         XCTAssertTrue(app.buttons["tags.start"].waitForExistence(timeout: 5))
+        app.buttons["选择标签"].firstMatch.tap()
         XCTAssertEqual(app.switches["tags.option.work"].value as? String, "1")
         app.buttons["tags.clear"].tap()
+        app.buttons["完成"].tap()
         XCTAssertFalse(app.buttons["tags.start"].isEnabled)
+        app.buttons["选择标签"].firstMatch.tap()
         app.switches["tags.option.untagged"].switches.firstMatch.tap()
+        app.buttons["完成"].tap()
         XCTAssertTrue(app.staticTexts["tags.preview"].label.contains("新卡 1 张"))
         app.buttons["tags.start"].tap()
         if app.buttons["开始新的复习"].waitForExistence(timeout: 2) { app.buttons["开始新的复习"].tap() }
@@ -65,11 +104,14 @@ final class VibeWordUITests: XCTestCase {
         XCTAssertEqual(card.value as? String, "untagged")
         app.buttons["study.exit"].tap()
         XCTAssertTrue(app.buttons["tags.start"].waitForExistence(timeout: 5))
+        app.buttons["选择标签"].firstMatch.tap()
         XCTAssertEqual(app.switches["tags.option.untagged"].value as? String, "1")
+        app.buttons["完成"].tap()
         app.buttons["关闭"].tap()
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["open.settings"].waitForExistence(timeout: 20))
         app.buttons["open.settings"].tap()
+        app.buttons["选择标签"].firstMatch.tap()
         let restoredWork = app.switches["tags.option.work"]
         reveal(restoredWork, in: app)
         XCTAssertEqual(restoredWork.value as? String, "1")

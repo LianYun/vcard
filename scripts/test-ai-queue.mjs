@@ -14,8 +14,9 @@ const calls = []
 let delay = false, late = false
 const pending = []
 const pair = { enToCn: { id: '', front: 'word', back: 'meaning' }, cnToEn: { id: '', front: 'meaning', back: 'word' } }
+let decks = [{ id: 'default', name: 'Default' }, { id: 'deck', name: 'Study' }]
 const storage = {
-  loadAITasks: async () => structuredClone(disk), saveAITasks: async state => {
+  loadDecks: async () => decks, loadAITasks: async () => structuredClone(disk), saveAITasks: async state => {
     assert.ok(!JSON.stringify(state).includes('SECRET'))
     if (failResult && state.tasks.some(t => t.drafts.length && t.status === 'review')) { failResult = false; throw Error('disk full') }
     disk = structuredClone(state)
@@ -33,15 +34,17 @@ const llm = {
   }, regenerateCard: async (_card, guidance) => ({ front: 'new front', back: guidance || 'new back', example: '' }),
 }
 const document = load('src/lib/documentImport.ts', { react: {}, './cardStore': {}, './llm': {}, './storage': {} })
-const { GenerationQueue } = load('src/lib/generationQueue.ts', { './storage': storage, './llm': llm, './documentImport': document })
+const { GenerationQueue } = load('src/lib/generationQueue.ts', { './tags': load('src/lib/tags.ts', {}), './storage': storage, './llm': llm, './documentImport': document })
 const wait = async (condition) => { for (let n = 0; n < 300; n++) { if (condition()) return; await new Promise(r => setTimeout(r, 5)) }; throw Error('timed out') }
 const queue = new GenerationQueue()
 await queue.initialize()
-const task = await queue.enqueue('word')
+const task = await queue.enqueue('word', undefined, 'default', ['chosen', 'chosen'])
 await wait(() => queue.getSnapshot()[0].status === 'review')
 assert.equal(formal.size, 0)
 let [first, second] = queue.getSnapshot()[0].drafts
 assert.equal(first.card.noteId, second.card.noteId)
+assert.equal(JSON.stringify(first.card.tags), JSON.stringify(['chosen']))
+assert.equal(JSON.stringify(second.card.tags), JSON.stringify(['chosen']))
 await queue.saveDraft(task.id, first.id, { ...first.card, back: 'edited', tags: ['tag'], deckId: 'deck' }, first.revision)
 await Promise.all([queue.confirm(task.id, first.id), queue.confirm(task.id, first.id)])
 assert.equal(formal.size, 1); assert.equal(calls[0].card.back, 'edited'); assert.equal(queue.getSnapshot()[0].drafts[1].status, 'ready')
@@ -102,13 +105,14 @@ const requestModel = llm.requestModel
 llm.requestModel = async (...args) => { extractions++; return requestModel(...args) }
 let failDocument = true
 llm.generateCardsFromMessages = async () => { if (failDocument) { failDocument = false; throw Error('temporary'); }; return structuredClone(pair) }
-const docTask = await migrated.enqueueDocument({ name: 'new.txt', sections: [{ id: 'p', label: 'Paragraph 1', text: 'A cue matters.' }], warnings: [] }, 1, true, 'context')
+const docTask = await migrated.enqueueDocument({ name: 'new.txt', sections: [{ id: 'p', label: 'Paragraph 1', text: 'A cue matters.' }], warnings: [] }, 1, true, 'context', 'deck', ['document-tag'])
 await wait(() => migrated.getSnapshot().find(t => t.id === docTask.id)?.status === 'failed')
 assert.equal(extractions, 1)
 await migrated.resume(docTask.id)
 await wait(() => migrated.getSnapshot().find(t => t.id === docTask.id)?.status === 'review')
 assert.equal(extractions, 1)
 assert.equal(migrated.getSnapshot().find(t => t.id === docTask.id).drafts.length, 2)
+assert.ok(migrated.getSnapshot().find(t => t.id === docTask.id).drafts.every(d => d.card.deckId === 'deck' && d.card.tags.includes('document-tag')))
 assert.equal(formal.size, 1)
 // A cancelled record that already contains reviewed drafts can be resumed
 // without generating again or resetting an accepted direction.
@@ -119,3 +123,45 @@ await migrated.resume(docTask.id)
 await wait(() => migrated.getSnapshot().find(t => t.id === docTask.id)?.status === 'review')
 assert.equal(migrated.getSnapshot().find(t => t.id === docTask.id).drafts[0].status, 'accepted')
 console.log('PASS queue concurrency, review isolation, independent confirmation, editing, crash recovery, cancellation, storage retry, stale draft protection, document continuation and legacy migration')
+
+// Target is persisted independently of the current page and survives retries/restart.
+const targeted = await migrated.enqueue('targeted', undefined, 'deck')
+await wait(() => migrated.getSnapshot().find(t => t.id === targeted.id)?.status === 'review')
+let targetedDrafts = migrated.getSnapshot().find(t => t.id === targeted.id).drafts
+assert.ok(targetedDrafts.every(d => d.card.deckId === 'deck'))
+const deckRecovery = new GenerationQueue(); await deckRecovery.initialize()
+assert.equal(deckRecovery.getSnapshot().find(t => t.id === targeted.id).targetDeckId, 'deck')
+decks = decks.filter(d => d.id !== 'deck')
+await assert.rejects(() => deckRecovery.confirm(targeted.id, targetedDrafts[0].id), /牌组不存在/)
+assert.equal(deckRecovery.getSnapshot().find(t => t.id === targeted.id).drafts[0].status, 'ready')
+await deckRecovery.saveDraft(targeted.id, targetedDrafts[0].id, { ...targetedDrafts[0].card, deckId: 'default' }, 0)
+await deckRecovery.confirm(targeted.id, targetedDrafts[0].id)
+assert.equal(deckRecovery.getSnapshot().find(t => t.id === targeted.id).drafts[0].status, 'accepted')
+await assert.rejects(() => deckRecovery.enqueue('invalid target', undefined, 'missing'), /牌组不存在/)
+console.log('PASS persisted target deck, both directions, recovery, deleted target rejection and reassignment')
+
+// A failed confirmation save leaves the previous snapshot intact. Retrying is
+// idempotent and unrelated image-heavy history keeps its object identity.
+const oldSave = storage.saveAITasks
+let failConfirmation = false
+storage.saveAITasks = async state => { if (failConfirmation) throw Error('confirmation disk full'); await oldSave(state) }
+const isolated = new GenerationQueue()
+await isolated.initialize()
+const readyTask = isolated.getSnapshot().find(t => t.drafts.some(d => d.status === 'ready') && t.kind !== 'replacement')
+assert.ok(readyTask)
+const readyDraft = readyTask.drafts.find(d => d.status === 'ready')
+if (!decks.some(d => d.id === (readyDraft.card.deckId ?? 'default'))) decks.push({ id: readyDraft.card.deckId ?? 'default', name: 'Fixture' })
+const before = isolated.getSnapshot()
+const formalBefore = formal.size
+failConfirmation = true
+await assert.rejects(isolated.confirm(readyTask.id, readyDraft.id), /confirmation disk full/)
+assert.equal(isolated.getSnapshot(), before)
+assert.equal(readyDraft.status, 'ready')
+const formalAfterFailure = formal.size
+assert.ok(formalAfterFailure >= formalBefore)
+failConfirmation = false
+await isolated.confirm(readyTask.id, readyDraft.id)
+assert.equal(formal.size, formalAfterFailure)
+for (const untouched of before.filter(t => t.id !== readyTask.id)) assert.equal(isolated.getSnapshot().find(t => t.id === untouched.id), untouched)
+assert.equal(isolated.getSnapshot().find(t => t.id === readyTask.id).drafts.find(d => d.id === readyDraft.id).status, 'accepted')
+console.log('PASS confirmation save retry, immutable snapshots and untouched task identity')

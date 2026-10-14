@@ -8,7 +8,7 @@ function PageImage({ id, label }: { id: string; label: string }) {
   useEffect(() => { let alive = true; void loadImportImage(id).then(value => { if (alive) setSrc(value) }).catch(() => {}); return () => { alive = false } }, [id])
   return src ? <img src={src} alt={label} className="max-w-full" /> : null
 }
-export function DocumentImport({ onAdded, onViewTasks }: { onAdded: () => void; onViewCards: () => void; onViewTasks: () => void }) {
+export function DocumentImport({ onAdded, onViewTasks, targetTags = [], targetDeckId = 'default' }: { targetTags?: string[]; targetDeckId?: string; onAdded: () => void; onViewCards: () => void; onViewTasks: () => void }) {
   const [supported, setSupported] = useState(false), [busy, setBusy] = useState(false)
   const [document, setDocument] = useState<ImportedDocument | null>(null), [sections, setSections] = useState<string[]>([])
   const [target, setTarget] = useState(10), [reverse, setReverse] = useState(true), [guidance, setGuidance] = useState('')
@@ -27,7 +27,7 @@ export function DocumentImport({ onAdded, onViewTasks }: { onAdded: () => void; 
     const config = await loadLLMConfig()
     if (!config?.apiKey || !config.model || !config.baseURL) throw new Error('请先在设置中配置 AI 模型')
     if (selected.sections.some(s => s.imageId) && !config.supportsImages) throw new Error('请在设置中配置支持图片输入的模型，并开启图片输入支持')
-    await generationQueue.enqueueDocument(selected, target, reverse, guidance)
+    await generationQueue.enqueueDocument(selected, target, reverse, guidance, targetDeckId, targetTags)
     setDocument(null); setMessage(t('已加入任务队列'))
   }
   return <section className="space-y-5">

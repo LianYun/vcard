@@ -1,9 +1,10 @@
+import { recentForgottenCards } from '../lib/forgotten'
+import { AppSelect } from './AppSelect'
 import type { LibrarySnapshot, StudyDetailsSnapshot } from '../hooks/useLibrarySnapshot'
-import { isNew, isDue } from '../lib/sm2'
-import { available } from '../lib/study'
+import { selectStudyCards } from '../lib/study'
 import { DeckManager } from './DeckManager'
-import { deckPath, inDeck } from '../lib/decks'
-import { scopeLabel } from './TagSelector'
+import { inDeck, deckPath } from '../lib/decks'
+import { scopeLabel, ScopeSummary } from './TagSelector'
 import { AnkiNoteEditor } from './AnkiNoteEditor'
 import { matchesTag, matchesStudyScope, normalizeTags } from '../lib/tags'
 import { t } from '../lib/i18n'
@@ -18,7 +19,6 @@ import { StudyDetailsPage, type StudyDetails } from './StudyDetailsPage'
 import { StatsBar } from './StatsBar'
 import { StudyHub } from './StudyHub'
 import { CardsJSONAction } from './CardsJSONAction'
-import { ActivityHeatmap } from './ActivityHeatmap'
 import { Markdown } from './Markdown'
 import { useCardEditor } from './CardEditor'
 import { SpeakButton } from './SpeakButton'
@@ -32,13 +32,18 @@ interface Props {
   snapshot: LibrarySnapshot | null
   loadError: string | null
   section: CardsSection
+  managementRequest: { view: 'decks' | 'tags'; revision: number } | null
+  deckReturn: { id: string; revision: number } | null
+  sessionDeckLabel?: string
+  onDeckAdd: (id: string) => void
   onDeckStudy: (id: string) => void
   onOpenDetails: (page: StudyDetails) => void
-  onStudy?: (scope: StudyScope) => void
+  onStudy?: (scope: StudyScope, deckId: string | null) => void
+  onChooseDeckStudy: () => void
   onTagStudy: (scope: StudyScope) => void
   onEditScope: () => void
   onResume: () => void
-  onBrowse: (cards: Card[]) => void
+  onBrowse: (cards: Card[], focused?: boolean) => void
   sessionScope: StudyScope
   canResume?: boolean
   refreshKey: number
@@ -94,7 +99,9 @@ function matchesQuery(card: Card, q: string): boolean {
   return haystack.includes(q.toLowerCase())
 }
 
-export function CardManager({ history, historyError, snapshot, loadError, section, onDeckStudy, onOpenDetails, onStudy, onBrowse, onTagStudy, onEditScope, onResume, sessionScope, canResume, refreshKey, onChanged, highlightCardId, onHighlightConsumed }: Props) {
+export function CardManager({ history, historyError, snapshot, loadError, section, managementRequest, deckReturn, sessionDeckLabel, onDeckAdd, onDeckStudy, onOpenDetails, onChooseDeckStudy, onStudy, onBrowse, onTagStudy, onEditScope, onResume, sessionScope, canResume, onChanged, highlightCardId, onHighlightConsumed }: Props) {
+  const forgottenDay = todayKey()
+  const forgottenCards = useMemo(() => history ? recentForgottenCards(history.cards, history.data.reviews, forgottenDay) : [], [history, forgottenDay])
   const [studyData,setStudyData]=useState<StudyData|null>(snapshot?.data ?? null)
   const [decks, setDecks] = useState<Deck[]>(snapshot?.decks ?? [])
   const [activeDeck, setActiveDeck] = useState<string | null>(null)
@@ -105,6 +112,7 @@ export function CardManager({ history, historyError, snapshot, loadError, sectio
   const [flashId, setFlashId] = useState<string | null>(null)
   const cardRefs = useRef<Map<string, HTMLLIElement>>(new Map())
 
+  const exportMenu = useRef<HTMLDetailsElement>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -124,7 +132,8 @@ export function CardManager({ history, historyError, snapshot, loadError, sectio
   const tags = [...new Set(cards.flatMap(card => normalizeTags(card.tags)))].sort((a, b) => a.localeCompare(b))
   const [defaultScope, setDefaultScope] = useState<StudyScope>(snapshot?.settings.studyScope ?? null)
   const [scopeReady, setScopeReady] = useState(Boolean(snapshot))
-  const scopedCards = cards.filter(card => matchesStudyScope(card, defaultScope))
+  const defaultDeck = snapshot?.settings.studyDeckId ?? null
+  const scopedCards = cards.filter(card => matchesStudyScope(card, defaultScope, decks) && inDeck(card, defaultDeck, decks))
 
   // Default-expanded group labels.
   const DEFAULT_OPEN: Record<string, boolean> = {
@@ -198,7 +207,6 @@ export function CardManager({ history, historyError, snapshot, loadError, sectio
     return section === 'library' ? cards.filter((c) => inDeck(c, activeDeck, decks) && matchesTag(c, tag) && matchesQuery(c, query.trim()) && (!studyData || matchesStudy(c,studyFilter,studyData.progress,studyData.controls,studyData.reviews))) : []
   }, [section, cards, query, tag,studyData,studyFilter,activeDeck,decks])
 
-  const deckCards = cards.filter(c => inDeck(c, activeDeck, decks) && (!studyData || available(studyData.controls[c.id])))
   const hasFilters = activeDeck !== null || Boolean(query.trim()) || tag !== null || studyFilter !== 'all'
   const selectedVisibleCount = filteredCards.filter(card => selectedIds.has(card.id)).length
 
@@ -235,7 +243,7 @@ export function CardManager({ history, historyError, snapshot, loadError, sectio
   }, [highlightCardId, filteredCards, groups])
 
   function startEdit(card: Card) {
-    openEditor({ kind: 'card', id: card.id, onSaved: onChanged })
+    openEditor({ kind: 'card', id: card.id, card, onSaved: onChanged })
   }
 
   async function handleDelete() {
@@ -310,7 +318,7 @@ export function CardManager({ history, historyError, snapshot, loadError, sectio
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <dialog ref={deleteDialog} className="deck-dialog" aria-labelledby="delete-card-title"
         onCancel={event => { event.preventDefault(); if (!deleteInFlight.current) setDeleteTarget(null) }}>
         {deleteTarget && <>
@@ -327,50 +335,56 @@ export function CardManager({ history, historyError, snapshot, loadError, sectio
       {section === 'today' && <div className="space-y-6">
       <StatsBar stats={snapshot?.stats} />
       <StudyHub onOpenDetails={onOpenDetails}
-        quickStudy={<><button className="btn-secondary" disabled={!scopeReady} onClick={() => onTagStudy(defaultScope)}>{t("按标签学习")}</button><button className="btn-secondary" onClick={() => onBrowse(cards)} disabled={cards.length === 0}>{t("快速学习")}</button></>}>
+        quickStudy={<><button className="btn-secondary" disabled={!scopeReady} onClick={onChooseDeckStudy}>{t("按牌组学习")}</button><button className="btn-secondary" disabled={!scopeReady} onClick={() => onTagStudy(defaultScope)}>{t("按标签学习")}</button><button className="btn-secondary" onClick={() => onBrowse(cards)} disabled={cards.length === 0}>{t("快速学习")}</button></>}>
         <div className="study-launch">
-          <p className="library-scope study-scope-label">{t("学习范围：{0}", scopeReady ? scopeLabel(defaultScope) : t("准备中…"))} <button className="study-quiet" onClick={onEditScope}>{t("修改")}</button></p>
-          {scopeReady && scopedCards.length === 0 && <p className="section-copy">{t("没有匹配卡片，请选择其他标签")}</p>}
+          <div className="library-scope study-scope-label">{scopeReady ? <ScopeSummary scope={defaultScope} decks={decks} /> : t("准备中…")} <button className="study-quiet" onClick={onEditScope}>{t("修改")}</button></div>
+          {scopeReady && scopedCards.length === 0 && <p className="section-copy">{t("当前没有匹配卡片")}</p>}
           <div className="library-session-actions">
-            {onStudy && <button className="study-start-button study-session-button" onClick={() => onStudy(defaultScope)} disabled={!scopeReady || scopedCards.length === 0}>
+            {onStudy && <button className="study-start-button study-session-button" onClick={() => onStudy(defaultScope, defaultDeck)} disabled={!scopeReady || scopedCards.length === 0}>
               <span className="study-start-icon" aria-hidden="true">▶</span>{t("开始学习")}
             </button>}
-            {canResume && <button className="btn-secondary study-scope-label study-session-button" onClick={onResume}>{t("继续上次学习 · {0}", scopeLabel(sessionScope))}</button>}
+            {canResume && <button className="btn-secondary study-scope-label study-session-button" onClick={onResume}>{t("继续上次学习 · {0}", sessionDeckLabel ?? scopeLabel(sessionScope, decks))}</button>}
           </div>
         </div>
       </StudyHub>
+      <section className="forgotten-study app-surface" aria-label={t('最近反复忘记的卡片')}>
+        <div><h3>{t('最近反复忘记的卡片')}</h3>
+          <p>{t('近 7 天点过“重来”的卡片，按遗忘次数排序，每张学习一次。')}</p>
+          <p role={historyError ? 'alert' : 'status'}>{historyError ? t('学习记录加载失败，请重新打开页面重试。') : !history ? t('准备中…') : forgottenCards.length ? t('共 {0} 张卡片', forgottenCards.length) : t('最近没有遗忘记录。')}</p>
+        </div>
+        <button className="btn-secondary" disabled={!history || !!historyError || !forgottenCards.length} onClick={() => onBrowse(forgottenCards, true)}>{t('学习一遍')}</button>
+      </section>
       </div>}
       {section === 'history' && <div className="space-y-6">
-        <ActivityHeatmap refreshKey={refreshKey} />
         <StudyDetailsPage snapshot={history} loadError={historyError} page="stats" embedded onAhead={() => {}} onExit={() => {}} />
       </div>}
-      {section === 'library' && <section className="library-browser app-surface" aria-label={t("卡片浏览")}>
-        <DeckManager decks={decks} cards={cards} active={activeDeck} onSelect={id => { setActiveDeck(id); exitSelectMode() }} selected={filteredCards.filter(c => selectedIds.has(c.id)).map(c => c.id)} onMoved={exitSelectMode} onChanged={() => onChanged?.()}>
-        <div className="deck-current"><div><h4>{activeDeck ? deckPath(activeDeck, decks) : t('全部卡片')}</h4>{activeDeck && studyData && <p>{t('新卡 {0} · 学习中 {1} · 已到期 {2}', deckCards.filter(c => isNew(studyData.progress[c.id])).length, deckCards.filter(c => studyData.progress[c.id]?.learningDue != null).length, deckCards.filter(c => isDue(studyData.progress[c.id])).length)}</p>}{activeDeck && <p>{t('包含子牌组 · 学习使用整个牌组，浏览筛选不影响学习范围')}</p>}</div>{activeDeck && <button className="btn-primary" disabled={!cards.some(c => inDeck(c, activeDeck, decks))} onClick={() => onDeckStudy(activeDeck)}>{t('学习此牌组')}</button>}<CardsJSONAction kind="exportCards" /></div>
+      <section hidden={section !== 'library'} className="library-browser app-surface" aria-label={t("卡片浏览")}>
+        <DeckManager managementRequest={managementRequest} onTagSelect={value => { setActiveDeck(null); setQuery(''); setStudyFilter('all'); setTag(value); exitSelectMode() }} deckReturn={deckReturn} onAdd={onDeckAdd} onStudy={onDeckStudy} showAll={highlightCardId} studyCount={id => { if (!snapshot) return 0; const result = selectStudyCards(cards.filter(c => inDeck(c,id,decks)), snapshot.data, snapshot.settings, snapshot.meta, null, decks); return result.reviews.length + result.fresh.length }} decks={decks} cards={cards} active={activeDeck} onSelect={id => { setActiveDeck(id); setQuery(''); setTag(null); setStudyFilter('all'); exitSelectMode() }} selected={filteredCards.filter(c => selectedIds.has(c.id)).map(c => c.id)} onMoved={exitSelectMode} onChanged={() => onChanged?.()}>
         <div className="library-controls" aria-label={t("卡片筛选与操作")}>
-        <div className="library-filters">
+        <div className="library-filters library-filters-with-deck">
           <div className="library-search">
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
             <input type="search" value={query} onChange={e => setQuery(e.target.value)}
               aria-label={t("搜索单词、释义或例句…")} placeholder={t("搜索单词、释义或例句…")} className="app-field" />
             {query && <button onClick={() => setQuery('')} aria-label={t("清除搜索")} className="library-search-clear">✕</button>}
           </div>
+          <label className="library-filter"><span>{t('牌组')}</span>
+            <AppSelect label={t('按牌组筛选')} value={activeDeck ?? ''}
+              onChange={value => { setActiveDeck(value || null); exitSelectMode() }}
+              options={[{ value: '', label: t('全部牌组') },
+                ...[...decks].sort((a, b) => deckPath(a.id, decks).localeCompare(deckPath(b.id, decks)))
+                  .map(deck => ({ value: deck.id, label: deckPath(deck.id, decks) }))]} />
+          </label>
           <label className="library-filter"><span>{t("标签")}</span>
-            <select className="app-field browse-select" aria-label={t("按标签筛选")} value={tag === null ? 'all' : `tag:${tag}`}
-              onChange={event => setTag(event.target.value === 'all' ? null : event.target.value.slice(4))}>
-              <option value="all">{t("全部卡片")}</option>
-              <option value="tag:">{t("未打标签")}</option>
-              {tags.map(value => <option key={value} value={`tag:${value}`}>{value}</option>)}
-              {tag && !tags.includes(tag) && <option value={`tag:${tag}`}>{tag}</option>}
-            </select>
+            <AppSelect label={t('按标签筛选')} value={tag === null ? 'all' : `tag:${tag}`}
+              onChange={value => setTag(value === 'all' ? null : value.slice(4))}
+              options={[{ value: 'all', label: t('全部标签') }, { value: 'tag:', label: t('未打标签') },
+                ...tags.map(value => ({ value: `tag:${value}`, label: value })),
+                ...(tag && !tags.includes(tag) ? [{ value: `tag:${tag}`, label: tag }] : [])]} />
           </label>
           <label className="library-filter"><span>{t('卡片状态')}</span>
-            <select className="app-field browse-select" aria-label={t("卡片状态")} value={studyFilter} onChange={e => setStudyFilter(e.target.value as StudyFilter)}>
-              {FILTERS.map(f => <option key={f.value} value={f.value}>{t(f.label)}</option>)}
-            </select>
+            <AppSelect label={t('卡片状态')} value={studyFilter} onChange={setStudyFilter} options={FILTERS.map(f => ({ value: f.value, label: t(f.label) }))} />
           </label>
-        </div>
-
         </div>
 
       {/* Toolbar */}
@@ -383,7 +397,7 @@ export function CardManager({ history, historyError, snapshot, loadError, sectio
             ? t("匹配 {0} / {1} 张", filteredCards.length, cards.length)
             : t("共 {0} 张卡片", cards.length)}
         </p>
-        {hasFilters && <button className="library-reset" onClick={() => { setQuery(''); setTag(null); setStudyFilter('all'); setActiveDeck(null); exitSelectMode() }}>{t("清除筛选")}</button>}
+        {hasFilters && <button className="library-reset" onClick={() => { setActiveDeck(null); setQuery(''); setTag(null); setStudyFilter('all'); exitSelectMode() }}>{t("清除筛选")}</button>}
         </div>
         <div className="card-manager-actions">
           {selectMode ? (
@@ -394,12 +408,6 @@ export function CardManager({ history, historyError, snapshot, loadError, sectio
                 className="btn-ghost text-xs"
               >
                 {allSelected ? t("取消全选") : t("全选")}
-              </button>
-              <button
-                onClick={handleExport}
-                disabled={selectedVisibleCount === 0}
-                className="btn-primary px-3 py-1.5 text-xs"
-              >{t("导出选中（{0}）", selectedVisibleCount)}
               </button>
               <button
                 onClick={exitSelectMode}
@@ -413,28 +421,32 @@ export function CardManager({ history, historyError, snapshot, loadError, sectio
                 disabled={filteredCards.length === 0}
                 className="card-manager-action card-manager-action-export"
               >{t("批量选择")}</button>
-              <button
-                onClick={handleExport}
-                disabled={filteredCards.length === 0}
-                className="card-manager-action card-manager-action-export"
-              >
-                {hasFilters ? t("导出筛选结果") : t("全部导出")}
-              </button>
             </>
           )}
+          <details ref={exportMenu} className="library-export" onBlur={event => {
+            if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false
+          }} onKeyDown={event => {
+            if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus() }
+          }}>
+            <summary className="card-manager-action card-manager-action-export">{t("导出")} <span aria-hidden="true">⌄</span></summary>
+            <div className="library-export-options">
+              <button disabled={exportTargets.length === 0} onClick={() => {
+                handleExport()
+                if (exportMenu.current) exportMenu.current.open = false
+              }}>
+                <strong>{t("Obsidian Markdown")}</strong>
+                <span>{selectMode ? t("导出选中 {0} 张卡片", exportTargets.length) : t("导出当前列表 {0} 张卡片", exportTargets.length)}</span>
+              </button>
+              <CardsJSONAction kind="exportCards" compact />
+            </div>
+          </details>
           {groups.length > 1 && (
-            <>
-              <button
-                onClick={() => setAllOpen(true)}
-                className="card-manager-action"
-              >{t("全部展开")}</button>
-              <button
-                onClick={() => setAllOpen(false)}
-                className="card-manager-action"
-              >{t("全部折叠")}</button>
-            </>
+            <button onClick={() => setAllOpen(!groups.every(group => isOpen(group.label)))} className="card-manager-action">
+              {groups.every(group => isOpen(group.label)) ? t("全部折叠") : t("全部展开")}
+            </button>
           )}
         </div>
+      </div>
       </div>
 
       {/* Empty states */}
@@ -562,7 +574,7 @@ export function CardManager({ history, historyError, snapshot, loadError, sectio
         })}
       </div>
       </DeckManager>
-      </section>}
+      </section>
     </div>
   )
 }
